@@ -6,6 +6,18 @@ The system performs real-time inference with temporal voting and cooldown filter
 
 ---
 
+# Project Evolution
+
+- Version 1.1: Initial ONNX inference pipeline
+- Version 1.2: Modular ONNX architecture
+- Version 1.3: Migrated to NCNN backend
+- Version 1.4: Added frame saving pipeline
+- Version 1.5: RGB/BGR optimization
+- Version 1.6: NCNN preprocessing fixes
+- Version 1.7: Temporal voting stabilization
+
+---
+
 # Features
 
 - Real-time traffic sign detection
