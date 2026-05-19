@@ -1,0 +1,11 @@
+build/
+*.zip
+*.onnx
+*.bin
+*.param
+*.jpg
+*.png
+*.mp4
+.venv/
+pi_debug_frames/
+src/models/
