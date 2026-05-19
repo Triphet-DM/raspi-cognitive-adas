@@ -21,11 +21,11 @@ The system performs real-time inference with temporal voting and cooldown filter
 
 ## Raspberry Pi HQ Camera + 16mm Telephoto Lens
 
-![hardware_closeup](README_assets/hardware_closeup.jpg)
+![hardware_closeup](README_assets/hardware_closeup(2).png)
 
 ## Real-world Testing Setup
 
-![testing_setup](README_assets/testing_setup.jpg)
+![testing_setup](README_assets/hardware_closeup(1).png)
 
 ---
 
@@ -45,23 +45,23 @@ The telephoto lens was used to improve long-range traffic sign visibility during
 
 ## Speed Limit 90 Detection
 
-![demo_90](README_assets/demo_90.png)
+![demo_90](README_assets/sign_90.png)
 
 ## Traffic Light Detection
 
-![demo_traffic_light](README_assets/demo_traffic_light.png)
+![demo_traffic_light](README_assets/traffic_sign.png)
 
 ## No U-Turn Detection
 
-![demo_no_uturn](README_assets/demo_no_uturn.png)
+![demo_no_uturn](README_assets/no_u_turn.png)
 
 ## School Zone Detection
 
-![demo_school_zone](README_assets/demo_school_zone.png)
+![demo_school_zone](README_assets/school_zone.png)
 
 ## Pedestrian Warning Detection
 
-![demo_pedestrian](README_assets/demo_pedestrian.png)
+![demo_pedestrian](README_assets/pedestrian_warning_sign.png)
 
 ---
 
