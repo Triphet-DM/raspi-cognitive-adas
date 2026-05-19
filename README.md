@@ -21,11 +21,11 @@ The system performs real-time inference with temporal voting and cooldown filter
 
 ## Raspberry Pi HQ Camera + 16mm Telephoto Lens
 
-![hardware_closeup](README_assets/hardware_closeup(2).png)
+![hardware_closeup](README_assets/hardware_closeup(1).png)
 
 ## Real-world Testing Setup
 
-![testing_setup](README_assets/hardware_closeup(1).png)
+![testing_setup](README_assets/hardware_closeup(2).png)
 
 ---
 
