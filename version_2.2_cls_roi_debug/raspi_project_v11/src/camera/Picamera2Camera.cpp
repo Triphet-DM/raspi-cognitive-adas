@@ -72,9 +72,11 @@ Picamera2Camera::~Picamera2Camera() {
 }
 
 bool Picamera2Camera::read(cv::Mat& frame_bgr) {
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject* result = PyObject_CallMethod(camera_, "read", nullptr);
     if (!result) {
         PyErr_Print();
+        PyGILState_Release(gstate);
         return false;
     }
 
@@ -86,12 +88,14 @@ bool Picamera2Camera::read(cv::Mat& frame_bgr) {
     if (!PyArg_ParseTuple(result, "y#ii", &buffer, &buffer_size, &width, &height)) {
         PyErr_Print();
         Py_DECREF(result);
+        PyGILState_Release(gstate);
         return false;
     }
 
     const Py_ssize_t expected_size = static_cast<Py_ssize_t>(width) * height * 3;
     if (buffer_size != expected_size) {
         Py_DECREF(result);
+        PyGILState_Release(gstate);
         return false;
     }
 
@@ -99,5 +103,6 @@ bool Picamera2Camera::read(cv::Mat& frame_bgr) {
     cv::cvtColor(rgb, frame_bgr, cv::COLOR_RGB2BGR);
 
     Py_DECREF(result);
+    PyGILState_Release(gstate);
     return true;
 }
