@@ -1,0 +1,304 @@
+================================================================
+ARCHITECTURE REVIEW — raspi_project v11 (version_2.2_cls_roi_debug)
+================================================================
+Date: 2026-06-05
+Scope: Static analysis of source code only. No runtime testing.
+
+
+================================================================
+FILES REVIEWED
+================================================================
+src/main.cpp
+src/utils/Types.h
+src/utils/Timer.h
+src/camera/Camera.h
+src/camera/Picamera2Camera.h
+src/camera/Picamera2Camera.cpp
+src/camera/CameraThread.h
+src/inference/NcnnModel.h
+src/inference/NcnnModel.cpp
+src/inference/YoloDetector.h
+src/inference/YoloDetector.cpp
+src/inference/SpeedSignClassifier.h
+src/inference/SpeedSignClassifier.cpp
+src/vision/Letterbox.h
+src/vision/Letterbox.cpp
+src/vision/Nms.h
+src/vision/Nms.cpp
+src/vision/Draw.h
+src/vision/Draw.cpp
+
+
+================================================================
+SYSTEM ARCHITECTURE SUMMARY
+================================================================
+
+LAYERS:
+  Orchestration  : main.cpp (main loop + 4 pipeline modes)
+  Concurrency    : CameraThread (double buffer) + AsyncDetectWorker
+  Decision       : CooldownManager + TemporalVoter + BestROI
+  Inference      : YoloDetector -> NcnnModel (YOLO11n, 512px)
+                   SpeedSignClassifier -> NcnnModel (CLS, 224px)
+  Vision         : Letterbox + NMS + Draw
+  Camera         : Picamera2Camera (C++ -> Python -> libcamera)
+
+PIPELINE MODES (controlled by --async-camera / --async-detect):
+  Mode 1: Sync camera + Sync detect      (default)
+  Mode 2: Async camera + Sync detect     (--async-camera)
+  Mode 3: Sync camera + Async detect     (--async-detect)
+  Mode 4: Async camera + Async detect    (--async-camera --async-detect)
+
+
+================================================================
+BUG #1 — DATA RACE IN CameraThread DOUBLE BUFFER
+================================================================
+Severity  : CRITICAL
+File      : src/camera/CameraThread.h
+Lines     : 122-148 (run), 81-93 (get_latest_frame)
+
+DESCRIPTION:
+  CameraThread uses a 2-slot (double) buffer with atomic index swap.
+  The design assumes that while camera writes to slot[write_idx],
+  main thread reads from slot[ready_idx]. But with only 2 slots,
+  camera can lap main thread and start writing to the slot main
+  is currently reading.
+
+RACE SCENARIO:
+  1. ready_index_ = 0
+  2. Camera: write_idx = 1-0 = 1 -> writes slot[1] -> swaps ready_index_ = 1
+  3. Camera: write_idx = 1-1 = 0 -> starts WRITING slot[0]      <- [A]
+  4. Main:   idx = ready_index_.load(acquire) -> gets 0
+             -> starts CLONING slot[0].frame_bgr                <- [B]
+  [A] and [B] are concurrent access to the same memory -> UB
+
+WHEN IT TRIGGERS:
+  Detection latency > camera frame interval * 2
+  Pi 4 YOLO inference: ~80-120ms
+  Camera at 30fps: ~33ms per frame
+  -> Camera completes 2+ iterations while detection runs once
+  -> Race window is wide, NOT an edge case
+
+EXACT CODE:
+  // run() line 128:
+  const int write_idx = 1 - ready_index_.load(std::memory_order_relaxed);
+  CameraFrame& write_slot = slots_[write_idx];
+  if (!camera_.read(write_slot.frame_bgr)) { ... }  // writes here
+
+  // get_latest_frame() line 82:
+  const int idx = ready_index_.load(std::memory_order_acquire);
+  out.frame_bgr = slots_[idx].frame_bgr.clone();    // reads here
+
+  // No mechanism prevents both accessing slots_[same_idx] simultaneously
+
+SYMPTOM:
+  Corrupted frame_bgr (garbage pixels, wrong colors)
+  -> Wrong detection output from corrupted input
+  -> Intermittent, not reproducible consistently
+
+FIX APPROACH OPTIONS:
+  Option A: Add mutex protecting the slot swap + clone operation
+            (small latency cost ~0.1ms, minimal architecture change)
+  Option B: Triple buffer (3 slots: camera always has a free write slot)
+            (no lock needed, uses +1.6MB RAM, lock-free truly)
+
+
+================================================================
+BUG #2 — PYTHON GIL VIOLATION IN CameraThread
+================================================================
+Severity  : HIGH
+File      : src/camera/Picamera2Camera.cpp
+Lines     : 75-101
+
+DESCRIPTION:
+  CameraThread calls Picamera2Camera::read() from a non-main OS thread.
+  read() calls Python C API functions without acquiring the GIL.
+  CPython specification requires any thread calling Python C API to
+  hold the GIL. Calling without it is undefined behavior.
+
+CALL CHAIN:
+  Picamera2Camera.cpp:6   -> Py_Initialize()           [main thread, GIL acquired here]
+  CameraThread.h:55       -> std::thread(&run, this)   [new OS thread spawned]
+  CameraThread.h:131      -> camera_.read()             [called from new thread]
+  Picamera2Camera.cpp:75  -> PyObject_CallMethod()      [Python C API, NO GIL]
+  Picamera2Camera.cpp:86  -> PyArg_ParseTuple()         [Python C API, NO GIL]
+  Picamera2Camera.cpp:101 -> Py_DECREF()                [Python C API, NO GIL]
+
+MISSING CODE (nowhere in entire project):
+  PyGILState_Ensure()
+  PyGILState_Release()
+  PyEval_SaveThread()
+  PyEval_RestoreThread()
+
+WHY IT MAY NOT CRASH IMMEDIATELY:
+  After constructor, main thread never calls Python again.
+  There is no concurrent Python access from main thread in normal operation.
+  The race is latent — it manifests when:
+    - Python cyclic GC triggers automatically (alloc count threshold)
+    - SIGINT handler runs (Py_FinalizeEx touches Python state)
+    - Py_DECREF refcount hits 0 -> enters Python allocator (pymalloc)
+  On ARM (Raspberry Pi), weaker memory ordering makes this more likely.
+
+IMPORTANT DISTINCTION:
+  "No crash observed" does NOT mean "no bug"
+  UB from GIL violation can be: crash / silent data corruption / no symptom
+  The absence of crash is not proof the code is correct.
+
+CORRECT FIX:
+  In Picamera2Camera::read():
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    // ... all Python C API calls ...
+    PyGILState_Release(gstate);
+
+
+================================================================
+BUG #3 — classify_ms NOT RECORDED IN ASYNC MODE
+================================================================
+Severity  : LOW (metrics correctness)
+File      : src/main.cpp, src/inference/YoloDetector.cpp
+
+DESCRIPTION:
+  classify_ms is set in two different places and the final value
+  is lost in async detect mode.
+
+  YoloDetector::detect() sets *classify_ms = 0.0 (line 97 YoloDetector.cpp)
+  run_decision() sets times.classify_ms = actual classifier time (line 481 main.cpp)
+
+  In async mode, run_decision() receives detection.times (from worker thread).
+  After run_decision() sets classify_ms on detection.times,
+  it goes into update_output_metrics() which calls avg.add(output_times, ...)
+  But the StageTimes passed to update_output_metrics is the local 'times'
+  variable, not the one run_decision() modified.
+
+  Result: classifier timing is measured but never reaches the rolling average.
+  Terminal display always shows cls: 0.0ms even when classifier ran.
+
+
+================================================================
+BUG #4 — TEMPORAL VOTER TIE-BREAK NON-DETERMINISTIC
+================================================================
+Severity  : LOW (correctness, rare)
+File      : src/main.cpp
+Lines     : 118-130
+
+DESCRIPTION:
+  When two classes have equal vote count, the tie-break iterates
+  history from newest to find which class appeared more recently.
+  But the outer loop iterates over std::map (sorted by key name,
+  alphabetical), not by vote count. The winner can change depending
+  on which class is processed last in the outer loop.
+
+  Example: "sign_50" and "sign_80" both have 3 votes.
+  std::map processes sign_50 first, then sign_80.
+  The inner reverse-history search runs twice, second run can
+  overwrite best_class even if sign_50 was more recent.
+
+  Tie is rare (requires equal counts in a 10-frame window)
+  but when it occurs, result depends on alphabetical class name
+  order, not on actual recency.
+
+
+================================================================
+DESIGN CONCERN #1 — MEMORY THROUGHPUT ON Pi
+================================================================
+Severity  : MEDIUM (performance on constrained hardware)
+
+  Every frame in async mode triggers multiple full-frame clones:
+    CameraThread::get_latest_frame()  -> frame_bgr.clone()  ~1.6MB
+    AsyncDetectionWorker::submit_latest() -> frame_bgr.clone()  ~1.6MB
+    BestROI::update() (when conf improves) -> frame.clone()  ~1.6MB
+
+  At 30fps full async:
+    ~3 clones/frame * 1.6MB * 30fps = ~144MB/s memory throughput
+
+  Raspberry Pi 4 LPDDR4: ~25GB/s theoretical, but shared with GPU,
+  OS, and inference. At load, effective bandwidth is much lower.
+  This can cause cache pressure that slows inference indirectly.
+
+
+================================================================
+DESIGN CONCERN #2 — NO BACKPRESSURE ON CameraThread
+================================================================
+Severity  : LOW (design, not a bug)
+
+  CameraThread runs as fast as the camera allows (30fps = 33ms/frame).
+  There is no mechanism to slow it down or signal it to pause.
+  If main thread is slow (classifier confirm takes time),
+  camera silently overwrites frames.
+
+  This is intentional (latest-frame policy) but there is no metric
+  tracking how many camera frames were never seen by the detector.
+  dropped_frames in AsyncDetectionWorker only counts frames dropped
+  at the detector queue level, not at the camera buffer level.
+
+
+================================================================
+DESIGN CONCERN #3 — SpeedSignClassifier OWNERSHIP
+================================================================
+Severity  : LOW (maintainability)
+File      : src/main.cpp lines 752-775
+
+  Ownership: detector (YoloDetector) owns classifier via unique_ptr
+  Access:    classifier_ptr (raw ptr) used in main thread decision path
+  Risk:      If anyone adds classifier call back inside YoloDetector::detect(),
+             there will be concurrent access from AsyncDetectionWorker thread
+             and main thread with no synchronization.
+
+  Current state is safe. The ownership pattern is fragile for future changes.
+
+
+================================================================
+EXPERIMENT DESIGN (to verify bugs at runtime on Pi)
+================================================================
+
+TO VERIFY GIL VIOLATION (no code change required):
+  1. Attach gdb to running process:
+       gdb -batch -ex "attach <PID>" \
+           -ex "call (int)PyGILState_Check()" \
+           -ex "detach" -ex "quit"
+     Run this command from CameraThread context.
+     Returns 0 = GIL not held = violation proven.
+
+  2. strace futex trace:
+       strace -f -e trace=futex -p <PID>
+     Check if CameraThread thread ID never calls futex for GIL acquire
+     before Python API calls.
+
+  3. Build with ThreadSanitizer:
+       -fsanitize=thread -g -O1
+     TSan will report data race on PyObject fields (ob_refcnt)
+     as distinct from cv::Mat buffer races.
+
+TO DISTINGUISH GIL FROM DOUBLE-BUFFER:
+  Stack trace on crash:
+    Crash in Py* frame   -> GIL violation
+    Crash in cv::Mat frame -> Double-Buffer race
+
+CONTROL vs EXPERIMENTAL:
+  Control:    ./app --async-detect          (sync camera, no GIL risk)
+  Experiment: ./app --async-camera --async-detect  (both risks active)
+  Stable control + unstable experiment = confirms async camera mode has issues.
+  Stack trace content = identifies which bug triggered.
+
+
+================================================================
+FIX PRIORITY ORDER
+================================================================
+
+1. GIL violation (Picamera2Camera.cpp)
+   - Provably wrong from static analysis alone
+   - Simple fix: 2 lines wrap with PyGILState_Ensure/Release
+   - No architecture change
+   - Fix this FIRST before running any experiments
+
+2. Double-Buffer race (CameraThread.h)
+   - Provably wrong from static analysis alone
+   - Requires design decision: mutex vs triple buffer
+   - Fix after GIL to avoid mixed signals in experiment results
+
+3. classify_ms metrics (main.cpp)
+   - No correctness impact, only affects profiling display
+   - Fix after the two critical bugs
+
+================================================================
+END OF REPORT
+================================================================
