@@ -14,5 +14,6 @@ public:
     bool read(cv::Mat& frame_bgr) override;
 
 private:
-    PyObject* camera_ = nullptr;
+    PyObject*      camera_ = nullptr;
+    PyThreadState* save_   = nullptr;
 };

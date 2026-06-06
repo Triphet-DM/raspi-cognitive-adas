@@ -54,9 +54,17 @@ class CppPicamera2:
         PyErr_Print();
         throw std::runtime_error("Failed to create Picamera2 object");
     }
+
+    // ปล่อย GIL ที่ Py_Initialize() ถือไว้ เพื่อให้ camera thread เรียก
+    // PyGILState_Ensure() ใน read() ได้สำเร็จ — re-acquire ใน destructor
+    save_ = PyEval_SaveThread();
 }
 
 Picamera2Camera::~Picamera2Camera() {
+    // re-acquire GIL ก่อนเรียก Python C API (close / Py_DECREF / Py_Finalize)
+    // guard: ถ้า constructor throw ก่อนถึง SaveThread → save_ ยังเป็น nullptr
+    if (save_) PyEval_RestoreThread(save_);
+
     if (camera_) {
         PyObject* result = PyObject_CallMethod(camera_, "close", nullptr);
         if (result) {
