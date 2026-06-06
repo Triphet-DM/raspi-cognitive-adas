@@ -30,6 +30,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <mutex>
 #include <thread>
 
 #include <opencv2/opencv.hpp>
@@ -40,10 +41,11 @@ using CamClock     = std::chrono::steady_clock;
 using CamTimePoint = std::chrono::time_point<CamClock>;
 
 struct CameraFrame {
-    cv::Mat  frame_bgr;
+    cv::Mat      frame_bgr;
     CamTimePoint captured_at;
-    uint64_t seq = 0;       // sequence number เพิ่มทุก frame
-    bool     valid = false;
+    uint64_t     seq   = 0;
+    bool         valid = false;
+    std::mutex   mtx;
 };
 
 class CameraThread {
@@ -80,15 +82,15 @@ public:
     // ============================================================
     bool get_latest_frame(CameraFrame& out) {
         const int idx = ready_index_.load(std::memory_order_acquire);
-        const CameraFrame& slot = slots_[idx];
+        CameraFrame& slot = slots_[idx];
 
+        std::lock_guard<std::mutex> lock(slot.mtx);
         if (!slot.valid) return false;
 
-        // clone frame ออกมา — main thread owns copy นี้
-        out.frame_bgr    = slot.frame_bgr.clone();
-        out.captured_at  = slot.captured_at;
-        out.seq          = slot.seq;
-        out.valid        = true;
+        out.frame_bgr   = slot.frame_bgr.clone();
+        out.captured_at = slot.captured_at;
+        out.seq         = slot.seq;
+        out.valid       = true;
         return true;
     }
 
@@ -124,24 +126,30 @@ private:
         while (!stop_.load(std::memory_order_relaxed)) {
             const auto t0 = CamClock::now();
 
-            // write_slot คือ slot ที่ main ไม่ได้ใช้อยู่
             const int write_idx = 1 - ready_index_.load(std::memory_order_relaxed);
             CameraFrame& write_slot = slots_[write_idx];
 
-            if (!camera_.read(write_slot.frame_bgr)) {
+            // read ลง temp ก่อน — ไม่ lock ตอน camera_.read() (~33ms)
+            cv::Mat temp;
+            if (!camera_.read(temp)) {
                 total_errors_.fetch_add(1, std::memory_order_relaxed);
                 continue;
             }
 
-            write_slot.captured_at = CamClock::now();
-            write_slot.seq         = ++seq;
-            write_slot.valid       = true;
+            // lock เฉพาะตอน move data เข้า slot (~0.1ms)
+            const CamTimePoint captured_at = CamClock::now();
+            {
+                std::lock_guard<std::mutex> lock(write_slot.mtx);
+                write_slot.frame_bgr   = std::move(temp);
+                write_slot.captured_at = captured_at;
+                write_slot.seq         = ++seq;
+                write_slot.valid       = true;
+            }
 
-            // atomic swap: main thread จะเห็น slot ใหม่ใน next get_latest_frame()
             ready_index_.store(write_idx, std::memory_order_release);
 
             const double ms = std::chrono::duration<double, std::milli>(
-                write_slot.captured_at - t0
+                captured_at - t0
             ).count();
             last_capture_ms_.store(ms, std::memory_order_relaxed);
             total_captured_.fetch_add(1, std::memory_order_relaxed);
