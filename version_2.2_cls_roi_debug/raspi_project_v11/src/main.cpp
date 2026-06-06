@@ -406,7 +406,7 @@ static DecisionResult run_decision(
     CooldownManager& cooldown,
     TemporalVoter& voter,
     SpeedSignClassifier* classifier,
-    BestROI& best_roi,
+    std::map<std::string, BestROI>& roi_by_class,
     const std::string& roi_debug_dir,   // "" = disabled, path = save crops
     int frame_index,
     StageTimes& times
@@ -424,10 +424,12 @@ static DecisionResult run_decision(
         result.top_class = best->class_name;
         result.top_conf  = best->confidence;
 
-        // BestROI tracking: เก็บ frame+box ที่ YOLO conf สูงสุดใน window
-        // classifier จะได้ crop คมชัดที่สุดตอน confirm ไม่ใช่ crop สุ่ม
-        if (SpeedSignClassifier::speed_sign_group().count(result.top_class)) {
-            best_roi.update(frame_bgr, best->box, result.top_conf, frame_index);
+        // BestROI tracking ต่อ class: เก็บ frame+box ที่ YOLO conf สูงสุดใน window
+        // ของแต่ละ class แยกกัน + ข้าม detection ที่ถูก cooldown suppress
+        // → classifier ได้ ROI ของ winning class เสมอ ไม่ปนข้าม class
+        if (SpeedSignClassifier::speed_sign_group().count(result.top_class) &&
+            !cooldown.is_suppressed(result.top_class)) {
+            roi_by_class[result.top_class].update(frame_bgr, best->box, result.top_conf, frame_index);
         }
     }
 
@@ -464,18 +466,20 @@ static DecisionResult run_decision(
         // classifier รันครั้งเดียวตอน confirm เท่านั้น
         // ใช้ best_roi (frame ที่ YOLO conf สูงสุดจาก window)
         // ไม่ใช่ frame ปัจจุบัน ซึ่งอาจจะไม่ใช่ frame ที่ดีที่สุด
+        auto roi_it = roi_by_class.find(output);   // output = voter winner
         if (classifier &&
             SpeedSignClassifier::speed_sign_group().count(output) &&
-            best_roi.valid)
+            roi_it != roi_by_class.end() && roi_it->second.valid)
         {
+            const BestROI& win_roi = roi_it->second;   // ROI ของ winning class เท่านั้น
             auto t_cls0 = std::chrono::high_resolution_clock::now();
             float cls_conf = 0.0f;
             const std::string cls_result = classifier->classify(
-                best_roi.frame_bgr, best_roi.box, &cls_conf,
+                win_roi.frame_bgr, win_roi.box, &cls_conf,
                 roi_debug_dir,          // ส่ง path → save crop ถ้าไม่ว่าง
                 output,                 // yolo class (voter winner)
-                best_roi.frame_idx,     // frame ที่ best_roi มาจาก
-                best_roi.yolo_conf      // conf ของ frame นั้น
+                win_roi.frame_idx,      // frame ที่ ROI มาจาก
+                win_roi.yolo_conf       // conf ของ frame นั้น
             );
             auto t_cls1 = std::chrono::high_resolution_clock::now();
             times.classify_ms = std::chrono::duration<double, std::milli>(
@@ -487,8 +491,8 @@ static DecisionResult run_decision(
                     std::cout << "[CLS] voter=" << output
                               << " -> classifier=" << cls_result
                               << " conf=" << cv::format("%.2f", cls_conf)
-                              << " best_roi_F" << best_roi.frame_idx
-                              << " yolo_conf=" << cv::format("%.2f", best_roi.yolo_conf)
+                              << " best_roi_F" << win_roi.frame_idx
+                              << " yolo_conf=" << cv::format("%.2f", win_roi.yolo_conf)
                               << "\n" << std::flush;
                 }
                 output = cls_result;
@@ -498,7 +502,7 @@ static DecisionResult run_decision(
             }
         }
 
-        best_roi.reset();
+        roi_by_class.clear();   // เคลียร์ ROI ทุก class — เริ่ม window ใหม่ พร้อม voter.reset()
 
         cooldown.activate(output);
         auto it = cooldown.class_cooldowns.find(output);
@@ -743,9 +747,10 @@ int main(int argc, char** argv) {
         CooldownManager cooldown;
         TemporalVoter   voter(10, 4);
 
-        // BestROI — เก็บ crop คมชัดที่สุดระหว่าง voting window
-        // reset ทุกครั้งหลัง confirm หรือหลัง voter reset
-        BestROI best_roi;
+        // ROI ต่อ class — เก็บ crop คมชัดที่สุดของแต่ละ class ระหว่าง voting window
+        // key = class name → classifier อ่าน roi_by_class[winner] ตอน confirm
+        // clear ทั้งหมดหลัง confirm (พร้อม voter.reset())
+        std::map<std::string, BestROI> roi_by_class;
 
         // raw pointer ไปยัง classifier (ถ้ามี) สำหรับส่งเข้า run_decision
         // ownership ยังอยู่ที่ detector ผ่าน set_classifier()
@@ -873,7 +878,7 @@ int main(int argc, char** argv) {
                 if (async_detector->try_take_result(detection)) {
                     times = detection.times;
                     run_decision(detection.detections, detection.frame_bgr,
-                                 cooldown, voter, classifier_ptr, best_roi,
+                                 cooldown, voter, classifier_ptr, roi_by_class,
                                  cfg.roi_debug_dir,
                                  detection.frame_index, times);
 
@@ -909,7 +914,7 @@ int main(int argc, char** argv) {
                 detection.result_ready_time = Clock::now();
 
                 run_decision(detection.detections, frame_bgr,
-                             cooldown, voter, classifier_ptr, best_roi,
+                             cooldown, voter, classifier_ptr, roi_by_class,
                              cfg.roi_debug_dir,
                              frame_index, times);
 
