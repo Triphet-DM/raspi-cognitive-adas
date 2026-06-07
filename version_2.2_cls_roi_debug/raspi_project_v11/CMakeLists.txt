@@ -15,6 +15,7 @@ add_executable(app
     src/inference/NcnnModel.cpp
     src/inference/YoloDetector.cpp
     src/inference/SpeedSignClassifier.cpp
+    src/decision/SpeedSignLifecycle.cpp
     src/vision/Letterbox.cpp
     src/vision/Nms.cpp
     src/vision/Draw.cpp

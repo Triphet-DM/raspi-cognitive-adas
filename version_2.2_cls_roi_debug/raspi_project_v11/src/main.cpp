@@ -39,21 +39,21 @@ using TimePoint = std::chrono::time_point<Clock>;
 // ============================================================
 struct CooldownManager {
     std::unordered_map<std::string, float> class_cooldowns = {
-        {"Pedestrian_Warning_Sign",  3.0f},
-        {"Pedestrian_crossing",      3.0f},
-        {"School_Zone",              3.0f},
-        {"Traffic_sign",             2.0f},
-        {"curve_ahead",              3.0f},
+        {"Pedestrian_Warning_Sign",  5.0f},
+        {"Pedestrian_crossing",      5.0f},
+        {"School_Zone",              5.0f},
+        {"Traffic_sign",             5.0f},
+        {"curve_ahead",              5.0f},
         {"no_parking",               5.0f},
         {"no_passing",               5.0f},
         {"no_stop",                  5.0f},
         {"no_u_turn",                5.0f},
-        {"sign_100",                 3.0f},
-        {"sign_50",                  3.0f},
-        {"sign_60",                  3.0f},
-        {"sign_80",                  3.0f},
-        {"sign_90",                  3.0f},
-        {"sign_four_way",            3.0f},
+        {"sign_100",                 5.0f},
+        {"sign_50",                  5.0f},
+        {"sign_60",                  5.0f},
+        {"sign_80",                  5.0f},
+        {"sign_90",                  5.0f},
+        {"sign_four_way",            5.0f},
     };
     float default_cooldown_sec = 5.0f;
 

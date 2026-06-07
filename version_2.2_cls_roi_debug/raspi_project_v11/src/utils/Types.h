@@ -77,7 +77,7 @@ struct AppConfig {
     int imgsz = 512;
     float conf_threshold = 0.25f;
     float iou_threshold = 0.45f;
-    int threads = 3;
+    int threads = 2;
     int camera_width = 960;
     int camera_height = 560;
     int camera_fps = 30;
