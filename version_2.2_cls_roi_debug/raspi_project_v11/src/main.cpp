@@ -23,6 +23,7 @@
 #include "camera/CameraThread.h"          // ← เพิ่ม
 #include "inference/YoloDetector.h"
 #include "inference/SpeedSignClassifier.h"
+#include "decision/SpeedSignLifecycle.h"
 #include "utils/Timer.h"
 #include "utils/Types.h"
 #include "vision/Draw.h"
@@ -275,6 +276,7 @@ static AppConfig parse_args(int argc, char** argv) {
         else if (key == "--save-frames")     cfg.save_frames      = true;
         else if (key == "--vulkan")          cfg.use_vulkan       = true;
         else if (key == "--no-packing")      cfg.use_packing      = false;
+        else if (key == "--lc-verbose")      cfg.lc_verbose       = true;
         else if (key == "--async-detect")    cfg.async_detect     = true;
         // ← flag ใหม่: --async-camera เปิด CameraThread
         else if (key == "--async-camera")    cfg.async_camera     = true;
@@ -407,6 +409,7 @@ static DecisionResult run_decision(
     TemporalVoter& voter,
     SpeedSignClassifier* classifier,
     std::map<std::string, BestROI>& roi_by_class,
+    SpeedSignLifecycle& lifecycle,        // Step 2: shadow observer (ไม่กระทบ decision)
     const std::string& roi_debug_dir,   // "" = disabled, path = save crops
     int frame_index,
     StageTimes& times
@@ -514,6 +517,14 @@ static DecisionResult run_decision(
     }
 
     times.vote_ms = timer.toc_ms();
+
+    // ── Step 2: speed-sign lifecycle (SHADOW ONLY) ──────────────
+    // ป้อนด้วยผลจาก voter/cooldown ปัจจุบัน → validate state machine
+    // ทิ้งค่า return: ไม่กระทบการตัดสินใจ (run_decision/cooldown/classifier/voter ยังเป็น authority)
+    lifecycle.update(result.top_class, result.suppressed,
+                     result.vote.confirmed, result.vote.winner,
+                     frame_index);
+
     return result;
 }
 
@@ -785,6 +796,11 @@ int main(int argc, char** argv) {
                       << "  min_conf: " << cfg.cls_min_conf << "\n";
         }
 
+        // Step 2 (SHADOW): lifecycle สังเกตการณ์ขนานกับ run_decision เดิม
+        // ไม่มี authority — แค่ track state + log [LC-SHADOW] เพื่อ validate
+        SpeedSignLifecycle lifecycle(classifier_ptr);
+        lifecycle.set_verbose(cfg.lc_verbose);
+
         std::unique_ptr<AsyncDetectionWorker> async_detector;
         if (cfg.async_detect) {
             async_detector = std::make_unique<AsyncDetectionWorker>(detector);
@@ -879,6 +895,7 @@ int main(int argc, char** argv) {
                     times = detection.times;
                     run_decision(detection.detections, detection.frame_bgr,
                                  cooldown, voter, classifier_ptr, roi_by_class,
+                                 lifecycle,
                                  cfg.roi_debug_dir,
                                  detection.frame_index, times);
 
@@ -915,6 +932,7 @@ int main(int argc, char** argv) {
 
                 run_decision(detection.detections, frame_bgr,
                              cooldown, voter, classifier_ptr, roi_by_class,
+                             lifecycle,
                              cfg.roi_debug_dir,
                              frame_index, times);
 

@@ -17,8 +17,6 @@
 #include <string>
 
 // forward declarations — เลี่ยง include หนักใน header
-struct BestROI;
-struct StageTimes;
 class  SpeedSignClassifier;
 
 enum class EpisodeState {
@@ -51,16 +49,18 @@ public:
         std::chrono::milliseconds safety_refractory  = std::chrono::milliseconds(1000)
     );
 
-    // Step 1: stub — คืน {fired=false} เสมอ, ไม่แตะ state, ไม่เรียก classifier
-    // Step 2: implement state machine จริง แล้วเรียกแบบ shadow mode
+    // Step 2 (SHADOW): ป้อนด้วยผลจาก voter/cooldown ที่มีอยู่ — track state + log
+    // อย่างเดียว, ไม่เรียก classifier, ไม่กระทบการตัดสินใจ (caller ทิ้งค่า return)
     Announcement update(
-        const std::string& speed_candidate,    // class ป้าย speed ที่ conf สูงสุดในเฟรม ("" = ไม่มี)
-        const BestROI&     roi_for_candidate,  // best ROI ของ candidate (จาก roi_by_class)
-        int                frame_index,
-        StageTimes&        times
+        const std::string& top_class,             // result.top_class (best ของเฟรม, any class)
+        bool               detection_suppressed,  // result.suppressed (cooldown)
+        bool               voter_confirmed,        // result.vote.confirmed
+        const std::string& voter_winner,           // result.vote.winner ("" ถ้ายังไม่ confirm)
+        int                frame_index
     );
 
     void reset();   // กลับสู่ Armed (ใช้ตอน re-arm / เริ่มใหม่)
+    void set_verbose(bool v) { verbose_ = v; }   // เปิด per-event SUPPRESS log (debug)
 
     const ActiveEpisode& episode() const { return episode_; }
 
@@ -72,6 +72,9 @@ private:
     std::chrono::milliseconds max_latch_;
     std::chrono::milliseconds safety_refractory_;
 
-    std::chrono::steady_clock::time_point last_announce_;   // ใช้กับ safety_refractory (Step 2)
+    std::chrono::steady_clock::time_point last_announce_;   // ใช้กับ safety_refractory (Step 3)
     bool has_announced_ = false;
+
+    int  suppressed_count_ = 0;      // นับ SUPPRESS ต่อ episode (shadow telemetry)
+    bool verbose_          = false;  // true = log SUPPRESS ทุกครั้ง (--lc-verbose)
 };

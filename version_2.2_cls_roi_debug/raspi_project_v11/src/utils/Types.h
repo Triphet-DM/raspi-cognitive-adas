@@ -87,6 +87,7 @@ struct AppConfig {
     bool use_packing = true;
     bool async_detect = false;
     bool async_camera = false;
+    bool lc_verbose = false;   // --lc-verbose: เปิด per-event SUPPRESS log ของ lifecycle (shadow)
 
     // Speed sign classifier (optional)
     std::string cls_param_path = "../src/models/classification/speed_classifier/model.ncnn.param";
