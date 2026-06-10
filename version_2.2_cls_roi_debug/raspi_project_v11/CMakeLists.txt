@@ -16,6 +16,12 @@ add_executable(app
     src/inference/YoloDetector.cpp
     src/inference/SpeedSignClassifier.cpp
     src/decision/SpeedSignLifecycle.cpp
+    src/decision/SignEpisodeLifecycle.cpp
+    src/decision/CurrentSpeedLimitManager.cpp
+    src/decision/AnnouncementPolicy.cpp
+    src/decision/ShadowSpeedLimitPipeline.cpp
+    src/audio/SpeedAudioMap.cpp
+    src/audio/NotificationManager.cpp
     src/vision/Letterbox.cpp
     src/vision/Nms.cpp
     src/vision/Draw.cpp

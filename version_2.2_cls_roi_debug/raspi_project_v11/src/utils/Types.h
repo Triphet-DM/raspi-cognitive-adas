@@ -87,7 +87,18 @@ struct AppConfig {
     bool use_packing = true;
     bool async_detect = false;
     bool async_camera = false;
-    bool lc_verbose = false;   // --lc-verbose: เปิด per-event SUPPRESS log ของ lifecycle (shadow)
+
+    // L1/L2/L3 shadow pipeline (Step 3) — log-only, default off
+    bool shadow              = false;   // --shadow: เปิด ShadowSpeedLimitPipeline
+    bool shadow_verbose      = false;   // --shadow-verbose: log SUPPRESS ของ shadow ด้วย
+    int  shadow_k            = 1;       // --shadow-k: K ของ L2 (>=1)
+    int  shadow_rearm_ms     = 600;     // --shadow-rearm-ms: rearm_after ของ L1
+    int  shadow_reminder_sec = 180;     // --shadow-reminder-sec: reminder cooldown ของ L3
+
+    // L4 NotificationManager (audio) — log-only เหมือนกัน, ตาม shadow decisions
+    bool        audio        = false;            // --audio: เปิดเสียง (ต้องใช้คู่ --shadow)
+    std::string audio_dir    = "../assets/audio";// --audio-dir: โฟลเดอร์ .wav
+    std::string audio_device = "plughw:0,0";     // --audio-device: ALSA device ของ aplay
 
     // Speed sign classifier (optional)
     std::string cls_param_path = "../src/models/classification/speed_classifier/model.ncnn.param";

@@ -4,104 +4,142 @@
 > Overwritten whenever a major architectural decision changes.
 > Detailed history lives in the dated session reports in `debug_reports/`.
 
-**Last updated:** 2026-06-07
+**Last updated:** 2026-06-09
 **Branch:** `fix-gil`
-**Latest commit:** `bf3dd54 feat(lifecycle): add SpeedSignLifecycle scaffolding`
+**HEAD:** `2353d44 wip: shadow lifecycle before level1 redesign` (archival checkpoint)
 
 ---
 
 ## Current Status
 
-Active work: redesigning the speed-limit sign confirmation subsystem from
-cooldown-driven logic to a lifecycle/state-machine architecture.
+Active work: rebuilding the speed-limit confirmation subsystem as a **three-layer
+belief-state architecture (L1/L2/L3)**, replacing the superseded voter-winner shadow.
 
-- Step 1 (lifecycle scaffolding) is committed and Pi-verified.
-- Step 2 (shadow implementation) exists in the working tree but is **uncommitted
-  and architecturally superseded** — it uses voter-winner identity, which the
-  2026-06-07 review rejected.
-- The approved path forward is the **Level 1** design (classifier = value
-  authority, class-agnostic presence). Not yet implemented.
+- Architecture is **frozen** as a v1 behavior contract (L1 Trigger Table, L2
+  Transition Table, L3 Decision Table). See the 2026-06-09 session report.
+- Implementation is underway, leaves-first: **L2 is implemented and unit-tested**
+  (33/33, clean g++ build). L3 is next, then L1+facade+wiring, then bench validation.
+- The whole new subsystem runs in **shadow mode (log-only, zero behavior change, no
+  extra inference)** before any authority cutover.
 
-No production behavior changes are deployed beyond the committed Step 1 scaffold
-(which is inert).
+No production behavior has changed. The superseded Step 2 voter-winner shadow is
+archived in commit `2353d44` and will be *replaced* (not promoted).
+
+---
+
+## The Architecture (frozen v1)
+
+"Current Speed Limit" is treated as a **belief state to be estimated**, not a
+perception output. Four concerns are separated: detection / presence / value /
+announcement.
+
+**Authority split:** YOLO = presence + ROI localization (not value). CLS = value
+authority, but only at confirm events (sparse, event-driven).
+
+| Layer | Class | Responsibility |
+|---|---|---|
+| **L1** | SignEpisodeLifecycle | Armed/Confirmed/Releasing; presence debounce; re-arm; emits `EpisodeConfirmed{value, fresh}` |
+| **L2** | CurrentSpeedLimitManager | UNKNOWN/ACTIVE belief; commit on CLS value change with K-hysteresis; no-forget |
+| **L3** | AnnouncementPolicy | CHANGE / REMINDER / SUPPRESS |
+
+Flow: `perception → L1 → L2 → L3`, owned by a thin **ShadowSpeedLimitPipeline**
+facade. Three plain concrete classes + facade — **no interfaces, inheritance, event
+bus, observer, DI, or generics.**
+
+Frozen rules:
+- **L1:** `fresh=TRUE` only on Armed→Confirmed (after a presence gap). Re-arm when
+  `now - last_seen ≥ rearm_after`.
+- **L2:** acquisition commits immediately (no K); a different value needs K
+  consecutive confirms; same value reconfirm refreshes + clears pending; **no-forget**
+  (no edge back to UNKNOWN); `age` is telemetry only. Default **K=1** (configurable).
+- **L3:** CHANGE always fires (never blocked by cooldown); REMINDER only for a fresh
+  episode of the *same* current value, gated by a **global** reminder cooldown;
+  continuation → silent. CHANGE resets the reminder timer.
+- **Gapless transitions** are handled by the value axis (no dedicated machinery).
 
 ---
 
 ## Stable / Verified
 
-- **Threads = 2** is the best-performing NCNN configuration on the Pi.
-  (`--threads` controls NCNN intra-op parallelism only, not any pipeline worker
-  pool.)
-- **FP16 arithmetic experiment produced no measurable improvement** and was
-  reverted.
-- Installed NCNN appears to **lack active ARM82 (arm82) FP16 kernels**, so
-  `use_fp16_arithmetic` silently no-ops (the Cortex-A76 CPU itself supports
-  `asimdhp`; the limitation is the library build).
-- **Step 1 SpeedSignLifecycle scaffolding committed** (`bf3dd54`).
-- **Pi build successful** (`[100%] Built target app`).
-- **Runtime smoke test successful** (app launches, detection pipeline normal, no
-  regressions).
-- Prior fixes remain in place: async-camera GIL deadlock, double-buffer per-slot
-  mutex, per-class ROI ownership.
+- **L2 CurrentSpeedLimitManager implemented + unit-tested** (33/33, clean
+  `g++ -Wall -Wextra`). Pure logic, no dependencies, no I/O.
+- **Threads = 2** is the best NCNN config (~10 FPS / ~93 ms infer).
+- **FP16 arithmetic = no-op** (installed NCNN lacks active arm82 kernels); reverted.
+- Prior fixes remain in place: async-camera GIL Save/RestoreThread, double-buffer
+  per-slot mutex, per-class ROI ownership. (All Pi-verified on 2026-06-06.)
 
 ---
 
 ## Working Tree (Uncommitted)
 
-- Step 2 **shadow** implementation present in 4 modified files:
-  - `src/decision/SpeedSignLifecycle.cpp`
-  - `src/decision/SpeedSignLifecycle.h`
-  - `src/main.cpp`
-  - `src/utils/Types.h`
-- Shadow-only: it observes and logs `[LC-SHADOW]`, discards its return, and does
-  **not** affect decisions.
-- **Current Step 2 uses voter-winner identity.**
-- Local header syntax check only (`g++ -fsyntax-only`); **not** Pi-built.
-- ⚠️ **Do not commit Step 2 as-is.** It is superseded and to be replaced by
-  Level 1.
+- `src/decision/CurrentSpeedLimitManager.h` / `.cpp` — **L2 (new, done)**
+- `tests/CurrentSpeedLimitManager_test.cpp` — L2 unit test (new)
+- `debug_reports/2026-06-09_session_report.md` — new
+- `debug_reports/PROJECT_STATUS.md` — this update
+
+These do not touch existing app sources (CMake/main.cpp untouched until Step 3).
 
 ---
 
-## Architecture Decisions
+## Architecture Decisions (in effect)
 
-- Speed-limit confirmation moves from cooldown-driven logic to a
-  **lifecycle/state-machine** model.
-- **Identity and value are separate concerns** answered by different mechanisms:
-  - Identity / persistence — "Is this still the same physical sign?"
-  - Value — "What speed limit is it?"
-- Persistence and value-change are **orthogonal**: a genuine limit change is
-  detected by a confident classifier-value change, independent of whether presence
-  drops (so gapless 50→60→80 transitions are still caught).
-- Cooldown is **not** an identity mechanism; it is demoted to a safety net.
-
----
-
-## Approved Direction (Level 1)
-
-- **Classifier is the value authority.**
-- `announced_value` comes from **classifier output** (the only value exposed
-  downstream / in `[LC-SHADOW] FIRE`).
-- **FIRE is based on classifier-value change** (initial `"" -> V`, or
-  `V_old -> V_new`), not on voter-winner change.
-- Speed-sign **persistence is class-agnostic presence based** (any of the five
-  speed classes present refreshes `last_seen`).
-- `candidate_value` (voter winner) is demoted to trigger / ROI selector only.
-- **Cooldown becomes a safety mechanism**, not an identity mechanism.
-- **Shadow validation before authority cutover.**
+- Belief-state model; identity and value are orthogonal.
+- YOLO = presence/ROI authority; CLS = value authority at confirm.
+- L2 no-forget; presence loss never changes the value.
+- K-hysteresis on value change (CLS-side), default K=1, configurable, bench-measured.
+- L3 CHANGE-always / REMINDER-on-fresh-episode; reminder cooldown global for v1.
+- At cutover: remove voter-input suppression (L3 owns anti-spam); re-sample CLS on
+  fresh episode or voter-class-change; skip same-class continuation.
+- Two timers, two owners: `rearm_after` (L1) ≠ `reminder_cooldown` (L3).
+- Object boundaries: 3 plain classes + thin facade, no abstraction machinery.
 
 ---
 
-## Rejected / Superseded Designs
+## Approved Direction (next steps)
 
-- **Voter-winner identity** — episode identity tied to the unstable YOLO sub-class.
-  YOLO flicker (sign_90 → sign_80 → sign_90 on one physical sign) creates false
-  value-change events. (This is what the current uncommitted Step 2 code does.)
-- **Cooldown keyed by YOLO class while the classifier overrides the final value** —
-  the suppression gate keys on the YOLO/voter class but `activate()` keys on the
-  classifier-corrected output; when they diverge, re-confirmation is never
-  throttled.
-- **Treating the YOLO sub-class as the authoritative speed-limit value** — YOLO
-  digit recognition is unstable; the classifier is the authority.
+Implementation roadmap (leaves-first):
+1. L2 — **done.**
+2. **L3 AnnouncementPolicy** — pure, returns `Action` enum, global cooldown, CHANGE
+   bypasses cooldown; framework-free unit test from the 4-row decision table.
+3. L1 refactor (strip SpeedSignLifecycle → presence state machine) +
+   ShadowSpeedLimitPipeline facade + main.cpp wiring + `--shadow` flag + CMake — one
+   coordinated step (L1 signature change forces the wiring change).
+4. Bench validation: diff `[SHADOW][L3]` vs existing `[CONFIRMED]`.
+
+Shadow wiring: log-only, zero behavior change, reuse existing CLS `output` (no extra
+inference), compute class-agnostic presence from `detections`, behind `--shadow`.
+
+---
+
+## Cut / Deferred / Rejected
+
+**Cut:**
+- **STALE state** → replaced by **age-as-display**. `T_stale` is not bench-validatable
+  (depends on road sign spacing); a parameter you can't validate is a liability.
+- Gapless-specific machinery (value axis covers it); ROI-quality/proximity re-sample
+  trigger; spatial tracking/identity layer.
+
+**Deferred:**
+- **L4 NotificationManager / Audio Manager** — until speaker hardware + real audio
+  logs exist. Recorded conclusion: single-slot latest-wins (collapse-to-latest, NOT
+  FIFO), own thread, non-preemptive within category, priority across categories.
+
+**Rejected / superseded:**
+- **Voter-winner identity** (Step 2 shadow, archived in `2353d44`) — episode identity
+  tied to the unstable YOLO sub-class → YOLO flicker creates false value-change
+  events. Replaced by L1/L2/L3.
+
+---
+
+## Validation Constraint (drives parameter choices)
+
+Bench/controlled testing is available; large-scale road validation is not. Rule:
+every behavioral parameter must be **bench-validatable, benign-default, or designed
+away** — zero un-determinable parameters.
+
+- `K` ← bench (CLS misread rate). `rearm_after` ← bench (YOLO dropout).
+- `reminder_cooldown` ← benign default. `T_stale` ← designed away.
+- gapless / co-visible frequency ← designed away (value axis + graceful degradation).
 
 ---
 
@@ -109,45 +147,46 @@ No production behavior changes are deployed beyond the committed Step 1 scaffold
 
 | Config | FPS | infer |
 |---|---|---|
-| **Threads = 2** (current default) | ~10 | ~93 ms |
-| Threads = 3 (previous default) | ~8 | ~116 ms |
+| **Threads = 2** (default) | ~10 | ~93 ms |
+| Threads = 3 (old) | ~8 | ~116 ms |
 
-Inference dominates frame time. FP16 arithmetic gives no gain (see Stable /
-Verified). Vulkan gives no gain (model too small to amortize GPU offload).
+Inference-bound. FP16 arithmetic and Vulkan both give no gain.
 
 ---
 
 ## Known Issues
 
-- **Repeat-confirmation bug:** current cooldown logic can repeatedly confirm the
-  same physical speed sign when the YOLO class and the classifier value disagree
-  (the case the Level 1 lifecycle is designed to fix).
-- `classify_ms` metric needs re-verification once the lifecycle drives
-  classification.
-- TemporalVoter tie-break is alphabetical, not recency-based (low priority;
-  orthogonal to the lifecycle work — do not fold into it).
+- **Repeat-confirmation bug** (the reason for L1/L2/L3) — fixed by construction in the
+  new architecture; validated only on the bench so far.
+- `classify_ms` metric needs re-verification once the lifecycle drives classification
+  (Bug #3, LOW).
+- TemporalVoter tie-break is alphabetical, not recency (Bug #4, LOW; keep orthogonal).
+- Camera-only staleness can be confidently wrong after an unsigned turn (no map/GPS);
+  accepted for v1, surfaced via age-as-display.
+- **Cleanup pending a human decision:** `picture results/Screenshot 2026-06-06
+  142354.png` was deleted inside `2353d44` — confirm intentional vs restore. Push
+  status of `fix-gil` unknown.
 
 ---
 
 ## Next Immediate Tasks
 
-1. **Rework the shadow lifecycle toward the Level 1 architecture** (classifier
-   authority, class-agnostic presence, FIRE on classifier-value change), replacing
-   the superseded voter-winner Step 2 code.
-2. **Add shadow instrumentation for classifier-value stability** (count
-   single-sample disagreements and co-visible oscillation).
-3. **Measure K=1 vs K=2 from data**, not assumptions (current lean: K=1, upgrade
-   only if instrumentation shows confident single-sample disagreement / co-visible
-   oscillation).
-4. **Validate 50→60→80 transition scenarios** (plus override and dropout) by
-   diffing `[LC-SHADOW]` against `[CONFIRMED]` on real footage.
+1. **Implement L3 (AnnouncementPolicy)** + unit test (Step 2 of the roadmap).
+2. Then L1 refactor + facade + wiring + CMake (Step 3, one coordinated step).
+3. Bench-validate `[SHADOW]` vs `[CONFIRMED]`; measure `age` and `Pending` to confirm
+   K=1 (or upgrade to K=2).
 
 ---
 
 ## Resume Point For Next Session
 
-- Read **PROJECT_STATUS.md** first (this file — source of truth).
-- Read the latest **session report** second (`2026-06-07_session_report.md`).
-- Continue from the **Level 1 lifecycle redesign**.
-- **Do not** continue from the current voter-winner identity design (it is
-  superseded; do not commit it as-is).
+- Read **PROJECT_STATUS.md** (this file) then the **2026-06-09 session report**.
+- **Finished:** architecture frozen (L1/L2/L3 + tables); L2 implemented + tested.
+- **Next:** implement **L3 (AnnouncementPolicy)**, mirroring L2's pattern (pure
+  concrete class, enum return, no internal logging, framework-free unit test).
+- **Do NOT:** promote/commit the voter-winner shadow as authority; implement STALE;
+  implement L4/audio; add interfaces/inheritance/event-bus/DI/generics; tune
+  road-dependent params from assumptions; change L1's signature without updating
+  main.cpp in the same step.
+- **Decided already:** authority split, no-forget, K=1 default, CHANGE-always /
+  REMINDER-on-fresh, STALE cut, L4 deferred, object boundaries, gapless-by-value-axis.

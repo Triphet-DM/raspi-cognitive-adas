@@ -24,6 +24,7 @@
 #include "inference/YoloDetector.h"
 #include "inference/SpeedSignClassifier.h"
 #include "decision/SpeedSignLifecycle.h"
+#include "decision/ShadowSpeedLimitPipeline.h"
 #include "utils/Timer.h"
 #include "utils/Types.h"
 #include "vision/Draw.h"
@@ -276,7 +277,14 @@ static AppConfig parse_args(int argc, char** argv) {
         else if (key == "--save-frames")     cfg.save_frames      = true;
         else if (key == "--vulkan")          cfg.use_vulkan       = true;
         else if (key == "--no-packing")      cfg.use_packing      = false;
-        else if (key == "--lc-verbose")      cfg.lc_verbose       = true;
+        else if (key == "--shadow")          cfg.shadow           = true;
+        else if (key == "--shadow-verbose")  cfg.shadow_verbose   = true;
+        else if (key == "--shadow-k")        cfg.shadow_k             = std::stoi(value(key));
+        else if (key == "--shadow-rearm-ms") cfg.shadow_rearm_ms      = std::stoi(value(key));
+        else if (key == "--shadow-reminder-sec") cfg.shadow_reminder_sec = std::stoi(value(key));
+        else if (key == "--audio")           cfg.audio            = true;
+        else if (key == "--audio-dir")       cfg.audio_dir        = value(key);
+        else if (key == "--audio-device")    cfg.audio_device     = value(key);
         else if (key == "--async-detect")    cfg.async_detect     = true;
         // ← flag ใหม่: --async-camera เปิด CameraThread
         else if (key == "--async-camera")    cfg.async_camera     = true;
@@ -289,7 +297,15 @@ static AppConfig parse_args(int argc, char** argv) {
                       << "  --async-detect   enable async detector thread\n"
                       << "  --async-camera   enable dedicated camera thread (double buffer)\n"
                       << "  --show-window    enable OpenCV GUI window (default: headless)\n"
-                      << "  --no-draw        skip overlay drawing for lowest CPU use\n";
+                      << "  --no-draw        skip overlay drawing for lowest CPU use\n"
+                      << "  --shadow         enable L1/L2/L3 shadow pipeline (log-only)\n"
+                      << "  --shadow-verbose log SUPPRESS events from the shadow pipeline\n"
+                      << "  --shadow-k <n>            L2 K-hysteresis (default 1)\n"
+                      << "  --shadow-rearm-ms <ms>    L1 re-arm timeout (default 600)\n"
+                      << "  --shadow-reminder-sec <s> L3 reminder cooldown (default 180)\n"
+                      << "  --audio          play audio on shadow announce (needs --shadow)\n"
+                      << "  --audio-dir <d>     wav directory (default ../assets/audio)\n"
+                      << "  --audio-device <d>  ALSA device for aplay (default plughw:0,0)\n";
             std::exit(0);
         } else {
             throw std::runtime_error("Unknown argument: " + key);
@@ -409,7 +425,9 @@ static DecisionResult run_decision(
     TemporalVoter& voter,
     SpeedSignClassifier* classifier,
     std::map<std::string, BestROI>& roi_by_class,
-    SpeedSignLifecycle& lifecycle,        // Step 2: shadow observer (ไม่กระทบ decision)
+    SpeedSignLifecycle& lifecycle,        // Step 2: voter-winner shadow (เก็บไว้เทียบ [LC-SHADOW])
+    ShadowSpeedLimitPipeline& pipeline,   // Step 3: L1/L2/L3 shadow ([SHADOW][L3])
+    bool shadow_enabled,                  // --shadow
     const std::string& roi_debug_dir,   // "" = disabled, path = save crops
     int frame_index,
     StageTimes& times
@@ -460,6 +478,10 @@ static DecisionResult run_decision(
                   << " winner_count=" << result.vote.winner_count
                   << "\n" << std::flush;
     }
+
+    // CLS-corrected value ของ confirm นี้ (อ่านโดย shadow pipeline ด้านล่าง)
+    // ว่าง = เฟรมนี้ไม่ confirmed; set เฉพาะใน block ข้างล่างหลัง CLS correction
+    std::string confirmed_value;
 
     if (result.vote.confirmed) {
         std::string output = result.vote.winner;
@@ -514,16 +536,33 @@ static DecisionResult run_decision(
         std::cout << "\n[CONFIRMED] >>> " << output
                   << " | cooldown: " << cv::format("%.1f", cd) << "s\n\n"
                   << std::flush;
+
+        confirmed_value = output;   // CLS-corrected → ป้อน shadow pipeline (read-only)
     }
 
     times.vote_ms = timer.toc_ms();
 
-    // ── Step 2: speed-sign lifecycle (SHADOW ONLY) ──────────────
-    // ป้อนด้วยผลจาก voter/cooldown ปัจจุบัน → validate state machine
+    // ── Step 2: voter-winner lifecycle (SHADOW, เก็บไว้เทียบ) ────────
+    // ป้อนด้วยผลจาก voter/cooldown ปัจจุบัน → [LC-SHADOW]
     // ทิ้งค่า return: ไม่กระทบการตัดสินใจ (run_decision/cooldown/classifier/voter ยังเป็น authority)
     lifecycle.update(result.top_class, result.suppressed,
                      result.vote.confirmed, result.vote.winner,
                      frame_index);
+
+    // ── Step 3: L1/L2/L3 shadow pipeline ([SHADOW][L3]) ─────────────
+    // presence = RAW class-agnostic speed-sign presence จาก detections ทั้งหมด
+    //   (ไม่ผ่าน cooldown, ไม่ใช่แค่ top_class — เป็นข้อเท็จจริงเชิง perception)
+    if (shadow_enabled) {
+        bool speed_presence = false;
+        for (const auto& det : detections) {
+            if (SpeedSignClassifier::speed_sign_group().count(det.class_name)) {
+                speed_presence = true;
+                break;
+            }
+        }
+        pipeline.tick(speed_presence, result.vote.confirmed,
+                      confirmed_value, frame_index, Clock::now());
+    }
 
     return result;
 }
@@ -796,10 +835,36 @@ int main(int argc, char** argv) {
                       << "  min_conf: " << cfg.cls_min_conf << "\n";
         }
 
-        // Step 2 (SHADOW): lifecycle สังเกตการณ์ขนานกับ run_decision เดิม
-        // ไม่มี authority — แค่ track state + log [LC-SHADOW] เพื่อ validate
+        // Step 2 (SHADOW): voter-winner lifecycle เดิม — เก็บไว้เทียบ [LC-SHADOW]
+        // ไม่มี authority. จะถูกลบหลัง shadow validation ผ่านบน Pi
         SpeedSignLifecycle lifecycle(classifier_ptr);
-        lifecycle.set_verbose(cfg.lc_verbose);
+
+        // Step 3 (SHADOW): L1/L2/L3 pipeline — [SHADOW][L3], log-only, behind --shadow
+        // Step 4: facade ถือ L4 NotificationManager (audio thread สร้างเฉพาะตอน --audio)
+        // tick ถูกเรียกใน run_decision (main thread เท่านั้น) → L1/L2/L3 ไม่ต้อง lock
+        ShadowSpeedLimitPipeline pipeline(
+            cfg.shadow_k,
+            std::chrono::milliseconds(cfg.shadow_rearm_ms),
+            std::chrono::seconds(cfg.shadow_reminder_sec),
+            cfg.shadow_verbose,
+            cfg.audio,
+            cfg.audio_dir,
+            cfg.audio_device
+        );
+        if (cfg.shadow) {
+            std::cout << "[SHADOW] L1/L2/L3 pipeline ON"
+                      << " (K=" << cfg.shadow_k
+                      << ", rearm=" << cfg.shadow_rearm_ms << "ms"
+                      << ", reminder=" << cfg.shadow_reminder_sec << "s)\n";
+        }
+        if (cfg.audio) {
+            std::cout << "[AUDIO] ON (dir=" << cfg.audio_dir
+                      << ", device=" << cfg.audio_device << ")\n";
+            if (!cfg.shadow) {
+                std::cout << "[AUDIO] WARNING: --audio needs --shadow to produce sound"
+                             " (shadow tick is off → silent)\n";
+            }
+        }
 
         std::unique_ptr<AsyncDetectionWorker> async_detector;
         if (cfg.async_detect) {
@@ -896,6 +961,7 @@ int main(int argc, char** argv) {
                     run_decision(detection.detections, detection.frame_bgr,
                                  cooldown, voter, classifier_ptr, roi_by_class,
                                  lifecycle,
+                                 pipeline, cfg.shadow,
                                  cfg.roi_debug_dir,
                                  detection.frame_index, times);
 
@@ -933,6 +999,7 @@ int main(int argc, char** argv) {
                 run_decision(detection.detections, frame_bgr,
                              cooldown, voter, classifier_ptr, roi_by_class,
                              lifecycle,
+                             pipeline, cfg.shadow,
                              cfg.roi_debug_dir,
                              frame_index, times);
 
