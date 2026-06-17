@@ -23,6 +23,7 @@
 #include "camera/CameraThread.h"          // ← เพิ่ม
 #include "inference/YoloDetector.h"
 #include "inference/SpeedSignClassifier.h"
+#include "audio/NotificationManager.h"        // shared L4 (owned here, fed by the pipeline)
 #include "decision/ShadowSpeedLimitPipeline.h"
 #include "utils/Timer.h"
 #include "utils/Types.h"
@@ -762,17 +763,21 @@ int main(int argc, char** argv) {
                       << "  min_conf: " << cfg.cls_min_conf << "\n";
         }
 
+        // Shared L4 — ONE audio output (one thread, one latest-wins slot). Owned here so that
+        // both Brain 1 (speed, below) and the future Brain 2 / Notification Arbiter feed the
+        // SAME channel. enabled=false (no --audio) → NotificationManager is a no-op, no thread.
+        // Must outlive `pipeline` (declared first; same scope).
+        NotificationManager notifier(cfg.audio_dir, cfg.audio_device, cfg.audio);
+
         // L1/L2/L3 pipeline — [SHADOW][L3], the speed AUTHORITY after cutover 2026-06-17.
-        // Step 4: facade ถือ L4 NotificationManager (audio thread สร้างเฉพาะตอน --audio)
+        // Feeds the shared L4 via pointer (no longer owns it).
         // tick ถูกเรียกใน run_decision (main thread เท่านั้น) → L1/L2/L3 ไม่ต้อง lock
         ShadowSpeedLimitPipeline pipeline(
             cfg.shadow_k,
             std::chrono::milliseconds(cfg.shadow_rearm_ms),
             std::chrono::seconds(cfg.shadow_reminder_sec),
             cfg.shadow_verbose,
-            cfg.audio,
-            cfg.audio_dir,
-            cfg.audio_device
+            &notifier
         );
         if (cfg.shadow) {
             std::cout << "[SPEED] L1/L2/L3 pipeline ON (authority)"

@@ -9,14 +9,12 @@ ShadowSpeedLimitPipeline::ShadowSpeedLimitPipeline(int k,
                                                    Millis rearm_after,
                                                    Millis reminder_cooldown,
                                                    bool   verbose,
-                                                   bool   audio_enabled,
-                                                   std::string audio_dir,
-                                                   std::string audio_device)
+                                                   NotificationManager* nm)
     : l1_(rearm_after),
       l2_(k),
       l3_(reminder_cooldown),
       verbose_(verbose),
-      nm_(std::move(audio_dir), std::move(audio_device), audio_enabled) {}
+      nm_(nm) {}
 
 bool ShadowSpeedLimitPipeline::is_speed(const std::string& cls) {
     return !cls.empty() &&
@@ -65,10 +63,11 @@ void ShadowSpeedLimitPipeline::tick(bool presence,
     const auto action  = l3_.decide(changed, ep.fresh, now);
     const bool announce = AnnouncementPolicy::is_announce(action);
 
-    // L4: ส่งเสียงเฉพาะ announce action (Change/Reminder); Suppress -> ไม่มีเสียง
-    //   no-op ถ้า --audio ปิด (nm_ enabled=false). value = belief ปัจจุบันของ L2
-    if (announce && l2_.current()) {
-        nm_.notify(action, *l2_.current());
+    // L4 (shared, external): ส่งเสียงเฉพาะ announce action (Change/Reminder); Suppress -> เงียบ
+    //   no-op ถ้า --audio ปิด (nm_->enabled_=false) หรือไม่มี sink (nm_==nullptr).
+    //   value = belief ปัจจุบันของ L2
+    if (announce && l2_.current() && nm_) {
+        nm_->notify(action, *l2_.current());
     }
 
     // ประกาศจริง (CHANGE/REMINDER) log เสมอ; SUPPRESS log เฉพาะ --shadow-verbose

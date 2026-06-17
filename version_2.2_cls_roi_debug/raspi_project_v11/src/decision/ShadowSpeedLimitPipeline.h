@@ -32,14 +32,14 @@ public:
     using TimePoint = Clock::time_point;
     using Millis    = std::chrono::milliseconds;
 
-    // audio_enabled=false -> NotificationManager เป็น no-op, ไม่ spawn audio thread
+    // nm = shared L4 (owned externally; one audio output for both brains via the Arbiter
+    //      later). nullptr = no audio sink wired. The NotificationManager's own enabled_
+    //      flag still decides no-op when --audio is off.
     ShadowSpeedLimitPipeline(int k,
                              Millis rearm_after,
                              Millis reminder_cooldown,
                              bool   verbose,
-                             bool   audio_enabled,
-                             std::string audio_dir,
-                             std::string audio_device);
+                             NotificationManager* nm);
 
     // เรียกทุก processed frame (main thread เท่านั้น)
     //   presence        : เห็นป้าย speed ใด ๆ ในเฟรมนี้ไหม (RAW, class-agnostic)
@@ -58,5 +58,5 @@ private:
     CurrentSpeedLimitManager l2_;
     AnnouncementPolicy       l3_;
     bool                     verbose_;
-    NotificationManager      nm_;   // L4 (init หลัง verbose_ ตามลำดับ declaration)
+    NotificationManager*     nm_;   // shared L4 — NOT owned (lives in main, fed by both brains)
 };
