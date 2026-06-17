@@ -28,18 +28,20 @@ NotificationManager::~NotificationManager() {
     if (thread_.joinable()) thread_.join();
 }
 
-void NotificationManager::notify(Action action, const std::string& value) {
+void NotificationManager::submit(const std::string& filename) {
     if (!enabled_) return;
-
-    const std::string file = SpeedAudioMap::filename(action, value);
-    if (file.empty()) return;   // SuppressX / ค่าไม่รู้จัก -> เงียบ
+    if (filename.empty()) return;   // ไม่มีคลิป -> เงียบ
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        pending_     = file;     // latest-wins: ของเก่าที่ยังไม่เล่นถูกทิ้ง
+        pending_     = filename;    // latest-wins: ของเก่าที่ยังไม่เล่นถูกทิ้ง
         has_pending_ = true;
     }
     cv_.notify_one();
+}
+
+void NotificationManager::notify(Action action, const std::string& value) {
+    submit(SpeedAudioMap::filename(action, value));
 }
 
 void NotificationManager::run() {

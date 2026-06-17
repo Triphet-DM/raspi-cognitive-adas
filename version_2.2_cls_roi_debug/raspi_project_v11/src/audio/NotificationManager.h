@@ -38,8 +38,11 @@ public:
     NotificationManager(const NotificationManager&)            = delete;
     NotificationManager& operator=(const NotificationManager&) = delete;
 
-    // non-blocking: map -> ถ้ามีคลิป เขียนทับ slot (latest-wins) + ปลุก thread
-    //   SuppressX / ค่าไม่รู้จัก -> ไม่ทำอะไร
+    // generic L4 entry: เล่นไฟล์ชื่อนี้ (latest-wins). "" -> no-op.
+    //   เป็นทางเข้ากลางที่ทั้ง 2 สมองใช้ร่วม (speed ผ่าน notify() ด้านล่าง, momentary ส่งตรง)
+    void submit(const std::string& filename);
+
+    // speed convenience: (action,value) -> SpeedAudioMap -> submit(). SuppressX/ไม่รู้จัก -> เงียบ
     void notify(Action action, const std::string& value);
 
 private:

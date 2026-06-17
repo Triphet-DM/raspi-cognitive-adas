@@ -7,10 +7,11 @@
 //
 //   tier        | rank | window | สมาชิก
 //   ------------|------|--------|---------------------------------------
-//   Safety      | 30   |  5 s   | Pedestrian_crossing      (คนข้ามเดี๋ยวนี้)
+//   Safety      | 30   |  5 s   | School_Zone  (เสี่ยงสูงสุด: เด็ก+มุมอับรถรับส่ง)
 //   (interrupt) | 25   |  5 s   | Pedestrian_Warning_Sign
-//               | 20   |  5 s   | School_Zone   ← = INTERRUPT_THRESHOLD
+//               | 20   |  5 s   | Pedestrian_crossing  ← = INTERRUPT_THRESHOLD (ต่ำสุดของ safety)
 //   ------------|------|--------|---------------------------------------
+//   re-ranked 2026-06-17 (Diamond): school zone เสี่ยงสูงสุดตามกฎหมาย/วิจัยไทย
 //   Warning     | 10   | 15 s   | curve_ahead
 //               |  8   | 15 s   | sign_four_way (crossroad), Traffic_sign (สัญญาณไฟข้างหน้า)
 //   ------------|------|--------|---------------------------------------
@@ -25,9 +26,9 @@ using Ms = std::chrono::milliseconds;
 const std::unordered_map<std::string, MomentaryPolicy>& table() {
     static const std::unordered_map<std::string, MomentaryPolicy> t = {
         // Safety (interrupt-capable: rank >= INTERRUPT_THRESHOLD)
-        {"Pedestrian_crossing",     {Ms(5000),  30}},
+        {"School_Zone",             {Ms(5000),  30}},
         {"Pedestrian_Warning_Sign", {Ms(5000),  25}},
-        {"School_Zone",             {Ms(5000),  20}},
+        {"Pedestrian_crossing",     {Ms(5000),  20}},
         // Warning
         {"curve_ahead",             {Ms(15000), 10}},
         {"sign_four_way",           {Ms(15000),  8}},

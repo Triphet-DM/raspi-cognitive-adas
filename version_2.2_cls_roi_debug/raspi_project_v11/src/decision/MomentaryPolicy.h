@@ -6,7 +6,8 @@
 //   { suppression_window (TIME, ต่อคลาส) , attention_rank (แกนเดียว) }
 //
 //   attention_rank : ยุบ priority + interrupt_level เหลือแกนเดียว (FROZEN 2026-06-15)
-//   INTERRUPT_THRESHOLD = Safety Boundary = rank ต่ำสุดของกลุ่ม life-safety (School Zone)
+//   INTERRUPT_THRESHOLD = Safety Boundary = rank ต่ำสุดของกลุ่ม life-safety
+//       (= Pedestrian_crossing หลัง re-rank 2026-06-17; เดิม School Zone)
 //       → "interrupt ได้" ⟺ "เป็น life-safety" (re-derive Law 2)
 //
 //   class memory ไม่ใช่ instance: window ผูกกับ "ชนิดป้าย" (camera-only, ไม่มี tracking/GPS)
@@ -25,7 +26,7 @@ struct MomentaryPolicy {
     std::chrono::milliseconds suppression_window;
     int                       attention_rank;
 
-    // Safety Boundary = School Zone rank. ป้าย rank >= นี้ คือ life-safety → interrupt ได้
+    // Safety Boundary = rank ต่ำสุดของ safety (= Pedestrian_crossing). rank >= นี้ = interrupt ได้
     static constexpr int INTERRUPT_THRESHOLD = 20;
 
     // คืน policy ของคลาส momentary, หรือ nullptr ถ้าไม่ใช่ momentary (speed / ไม่รู้จัก)

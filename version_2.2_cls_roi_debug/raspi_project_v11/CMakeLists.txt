@@ -20,7 +20,11 @@ add_executable(app
     src/decision/CurrentSpeedLimitManager.cpp
     src/decision/AnnouncementPolicy.cpp
     src/decision/ShadowSpeedLimitPipeline.cpp
+    src/decision/MomentaryPolicy.cpp
+    src/decision/MomentaryEngine.cpp
+    src/decision/BehaviorPolicyRouter.cpp
     src/audio/SpeedAudioMap.cpp
+    src/audio/MomentaryAudioMap.cpp
     src/audio/NotificationManager.cpp
     src/vision/Letterbox.cpp
     src/vision/Nms.cpp

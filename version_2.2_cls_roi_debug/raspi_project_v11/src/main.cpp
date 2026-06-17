@@ -23,8 +23,11 @@
 #include "camera/CameraThread.h"          // ← เพิ่ม
 #include "inference/YoloDetector.h"
 #include "inference/SpeedSignClassifier.h"
-#include "audio/NotificationManager.h"        // shared L4 (owned here, fed by the pipeline)
+#include "audio/NotificationManager.h"        // shared L4 (owned here, fed by both brains)
+#include "audio/MomentaryAudioMap.h"          // Brain 2 — class -> wav
 #include "decision/ShadowSpeedLimitPipeline.h"
+#include "decision/BehaviorPolicyRouter.h"    // Brain 2 dispatch (after confirm)
+#include "decision/MomentaryEngine.h"         // Brain 2 — momentary (non-speed) signs
 #include "utils/Timer.h"
 #include "utils/Types.h"
 #include "vision/Draw.h"
@@ -376,6 +379,8 @@ static DecisionResult run_decision(
     SpeedSignClassifier* classifier,
     std::map<std::string, BestROI>& roi_by_class,
     ShadowSpeedLimitPipeline& pipeline,   // L1/L2/L3 — AUTHORITY ([SHADOW][L3])
+    MomentaryEngine& momentary,           // Brain 2 — non-speed momentary signs
+    NotificationManager& notifier,        // shared L4 (interim: momentary submits direct)
     bool shadow_enabled,
     const std::string& roi_debug_dir,   // "" = disabled, path = save crops
     int frame_index,
@@ -473,7 +478,23 @@ static DecisionResult run_decision(
         // cutover 2026-06-17: legacy [CONFIRMED] + cooldown.activate() removed.
         // CLS correction above stays (computes the value); the announce/suppress
         // decision is now entirely L3's (see pipeline.tick below).
-        confirmed_value = output;   // CLS-corrected → ป้อน L1/L2/L3 pipeline
+        confirmed_value = output;   // CLS-corrected → ป้อน L1/L2/L3 pipeline (speed only)
+
+        // ── Brain 2 dispatch (BehaviorPolicyRouter) ──────────────────────
+        // non-speed confirmed sign → MomentaryEngine. LOG-ONLY for now: audio +
+        // cross-brain arbitration come with refactor #2 + Notification Arbiter.
+        // (speed handled by pipeline.tick below; None = unknown class → ignore)
+        if (BehaviorPolicyRouter::route(output) == BehaviorPolicyRouter::Brain::Momentary) {
+            const auto m = momentary.onConfirmed(output, Clock::now());
+            if (MomentaryEngine::is_announce(m.decision)) {
+                std::cout << "[MOMENTARY] ANNOUNCE " << m.cls
+                          << " rank=" << m.attention_rank
+                          << " F" << frame_index << "\n" << std::flush;
+                // interim (ยังไม่มี Arbiter): ส่งเข้า shared L4 ตรง ๆ. ไฟล์หาย -> เงียบ
+                notifier.submit(MomentaryAudioMap::filename(m.cls));
+            }
+            // SUPPRESS = เงียบ (ไม่ log กัน spam ตอนป้ายค้างในเฟรม)
+        }
     }
 
     times.vote_ms = timer.toc_ms();
@@ -779,6 +800,11 @@ int main(int argc, char** argv) {
             cfg.shadow_verbose,
             &notifier
         );
+
+        // Brain 2 — Momentary engine (non-speed signs). LOG-ONLY for now: routed by
+        // BehaviorPolicyRouter in run_decision; audio/arbitration land with refactor #2.
+        MomentaryEngine momentary;
+
         if (cfg.shadow) {
             std::cout << "[SPEED] L1/L2/L3 pipeline ON (authority)"
                       << " (K=" << cfg.shadow_k
@@ -887,7 +913,7 @@ int main(int argc, char** argv) {
                     times = detection.times;
                     run_decision(detection.detections, detection.frame_bgr,
                                  voter, classifier_ptr, roi_by_class,
-                                 pipeline, cfg.shadow,
+                                 pipeline, momentary, notifier, cfg.shadow,
                                  cfg.roi_debug_dir,
                                  detection.frame_index, times);
 
@@ -924,7 +950,7 @@ int main(int argc, char** argv) {
 
                 run_decision(detection.detections, frame_bgr,
                              voter, classifier_ptr, roi_by_class,
-                             pipeline, cfg.shadow,
+                             pipeline, momentary, notifier, cfg.shadow,
                              cfg.roi_debug_dir,
                              frame_index, times);
 

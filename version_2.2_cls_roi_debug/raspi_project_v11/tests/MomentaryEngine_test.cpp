@@ -46,22 +46,23 @@ static void test_policy_lookup() {
 }
 
 static void test_policy_ranks() {
-    CHECK(MomentaryPolicy::lookup("Pedestrian_crossing")->attention_rank == 30);
+    // re-ranked 2026-06-17: School Zone สูงสุด, Pedestrian_crossing = boundary
+    CHECK(MomentaryPolicy::lookup("School_Zone")->attention_rank == 30);
     CHECK(MomentaryPolicy::lookup("Pedestrian_Warning_Sign")->attention_rank == 25);
-    CHECK(MomentaryPolicy::lookup("School_Zone")->attention_rank == 20);
+    CHECK(MomentaryPolicy::lookup("Pedestrian_crossing")->attention_rank == 20);
     CHECK(MomentaryPolicy::lookup("curve_ahead")->attention_rank == 10);
     CHECK(MomentaryPolicy::lookup("no_stop")->attention_rank == 4);
-    // School Zone = Safety Boundary
-    CHECK(MomentaryPolicy::lookup("School_Zone")->attention_rank
+    // Pedestrian_crossing = ต่ำสุดของ safety = Safety Boundary
+    CHECK(MomentaryPolicy::lookup("Pedestrian_crossing")->attention_rank
           == MomentaryPolicy::INTERRUPT_THRESHOLD);
 }
 
 // safety interrupt-capable (>= threshold), อื่น ๆ ไม่ใช่
 static void test_threshold_membership() {
     const int TH = MomentaryPolicy::INTERRUPT_THRESHOLD;
-    CHECK(MomentaryPolicy::lookup("Pedestrian_crossing")->attention_rank >= TH);
+    CHECK(MomentaryPolicy::lookup("School_Zone")->attention_rank >= TH);
     CHECK(MomentaryPolicy::lookup("Pedestrian_Warning_Sign")->attention_rank >= TH);
-    CHECK(MomentaryPolicy::lookup("School_Zone")->attention_rank >= TH);   // = TH
+    CHECK(MomentaryPolicy::lookup("Pedestrian_crossing")->attention_rank >= TH);   // = TH
     CHECK(MomentaryPolicy::lookup("curve_ahead")->attention_rank < TH);
     CHECK(MomentaryPolicy::lookup("no_parking")->attention_rank < TH);
 }
@@ -73,7 +74,7 @@ static void test_first_announce() {
     auto r = e.onConfirmed("Pedestrian_crossing", t(0));
     CHECK(r.decision == Dec::Announce);
     CHECK(r.cls == "Pedestrian_crossing");
-    CHECK(r.attention_rank == 30);
+    CHECK(r.attention_rank == 20);
 }
 
 // ภายใน window → suppress (School_Zone window = 5s)
