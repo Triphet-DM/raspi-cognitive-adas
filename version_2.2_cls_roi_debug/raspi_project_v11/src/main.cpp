@@ -23,7 +23,6 @@
 #include "camera/CameraThread.h"          // ← เพิ่ม
 #include "inference/YoloDetector.h"
 #include "inference/SpeedSignClassifier.h"
-#include "decision/SpeedSignLifecycle.h"
 #include "decision/ShadowSpeedLimitPipeline.h"
 #include "utils/Timer.h"
 #include "utils/Types.h"
@@ -36,57 +35,9 @@ namespace fs = std::filesystem;
 using Clock     = std::chrono::steady_clock;
 using TimePoint = std::chrono::time_point<Clock>;
 
-// ============================================================
-// CooldownManager — ไม่เปลี่ยนแปลง
-// ============================================================
-struct CooldownManager {
-    std::unordered_map<std::string, float> class_cooldowns = {
-        {"Pedestrian_Warning_Sign",  5.0f},
-        {"Pedestrian_crossing",      5.0f},
-        {"School_Zone",              5.0f},
-        {"Traffic_sign",             5.0f},
-        {"curve_ahead",              5.0f},
-        {"no_parking",               5.0f},
-        {"no_passing",               5.0f},
-        {"no_stop",                  5.0f},
-        {"no_u_turn",                5.0f},
-        {"sign_100",                 5.0f},
-        {"sign_50",                  5.0f},
-        {"sign_60",                  5.0f},
-        {"sign_80",                  5.0f},
-        {"sign_90",                  5.0f},
-        {"sign_four_way",            5.0f},
-    };
-    float default_cooldown_sec = 5.0f;
-
-    bool is_suppressed(const std::string& cls) const {
-        auto it = cooldown_end_.find(cls);
-        if (it == cooldown_end_.end()) return false;
-        return Clock::now() < it->second;
-    }
-
-    float remaining_sec(const std::string& cls) const {
-        auto it = cooldown_end_.find(cls);
-        if (it == cooldown_end_.end()) return 0.0f;
-        auto now = Clock::now();
-        if (now >= it->second) return 0.0f;
-        return std::chrono::duration<float>(it->second - now).count();
-    }
-
-    void activate(const std::string& cls) {
-        float duration = default_cooldown_sec;
-        auto it = class_cooldowns.find(cls);
-        if (it != class_cooldowns.end()) duration = it->second;
-        cooldown_end_[cls] =
-            Clock::now() +
-            std::chrono::duration_cast<Clock::duration>(
-                std::chrono::duration<float>(duration)
-            );
-    }
-
-private:
-    std::unordered_map<std::string, TimePoint> cooldown_end_;
-};
+// CooldownManager (legacy voter-input suppression) removed at cutover 2026-06-17.
+// Anti-spam is now owned entirely by L3 (AnnouncementPolicy):
+// CHANGE-always / REMINDER-on-fresh@reminder_cooldown / SuppressContinuation.
 
 // ============================================================
 // TemporalVoter — ไม่เปลี่ยนแปลง
@@ -298,12 +249,12 @@ static AppConfig parse_args(int argc, char** argv) {
                       << "  --async-camera   enable dedicated camera thread (double buffer)\n"
                       << "  --show-window    enable OpenCV GUI window (default: headless)\n"
                       << "  --no-draw        skip overlay drawing for lowest CPU use\n"
-                      << "  --shadow         enable L1/L2/L3 shadow pipeline (log-only)\n"
-                      << "  --shadow-verbose log SUPPRESS events from the shadow pipeline\n"
+                      << "  --shadow         (no-op; L1/L2/L3 pipeline is the authority since cutover)\n"
+                      << "  --shadow-verbose log SUPPRESS events from the L1/L2/L3 pipeline\n"
                       << "  --shadow-k <n>            L2 K-hysteresis (default 1)\n"
                       << "  --shadow-rearm-ms <ms>    L1 re-arm timeout (default 600)\n"
                       << "  --shadow-reminder-sec <s> L3 reminder cooldown (default 180)\n"
-                      << "  --audio          play audio on shadow announce (needs --shadow)\n"
+                      << "  --audio          play audio on speed announce\n"
                       << "  --audio-dir <d>     wav directory (default ../assets/audio)\n"
                       << "  --audio-device <d>  ALSA device for aplay (default plughw:0,0)\n";
             std::exit(0);
@@ -332,7 +283,6 @@ struct DetectionResult {
 struct DecisionResult {
     std::string top_class;
     float top_conf = 0.0f;
-    bool suppressed = false;
     TemporalVoter::VoteResult vote;
 };
 
@@ -421,13 +371,11 @@ static DetectionResult run_detection(
 static DecisionResult run_decision(
     const std::vector<Detection>& detections,
     const cv::Mat& frame_bgr,
-    CooldownManager& cooldown,
     TemporalVoter& voter,
     SpeedSignClassifier* classifier,
     std::map<std::string, BestROI>& roi_by_class,
-    SpeedSignLifecycle& lifecycle,        // Step 2: voter-winner shadow (เก็บไว้เทียบ [LC-SHADOW])
-    ShadowSpeedLimitPipeline& pipeline,   // Step 3: L1/L2/L3 shadow ([SHADOW][L3])
-    bool shadow_enabled,                  // --shadow
+    ShadowSpeedLimitPipeline& pipeline,   // L1/L2/L3 — AUTHORITY ([SHADOW][L3])
+    bool shadow_enabled,
     const std::string& roi_debug_dir,   // "" = disabled, path = save crops
     int frame_index,
     StageTimes& times
@@ -446,27 +394,19 @@ static DecisionResult run_decision(
         result.top_conf  = best->confidence;
 
         // BestROI tracking ต่อ class: เก็บ frame+box ที่ YOLO conf สูงสุดใน window
-        // ของแต่ละ class แยกกัน + ข้าม detection ที่ถูก cooldown suppress
-        // → classifier ได้ ROI ของ winning class เสมอ ไม่ปนข้าม class
-        if (SpeedSignClassifier::speed_sign_group().count(result.top_class) &&
-            !cooldown.is_suppressed(result.top_class)) {
+        // ของแต่ละ class แยกกัน → classifier ได้ ROI ของ winning class เสมอ ไม่ปนข้าม class
+        // (cutover 2026-06-17: ตัด cooldown gate ออก — track ทุกเฟรมที่เป็น speed sign)
+        if (SpeedSignClassifier::speed_sign_group().count(result.top_class)) {
             roi_by_class[result.top_class].update(frame_bgr, best->box, result.top_conf, frame_index);
         }
     }
 
-    if (!result.top_class.empty() && cooldown.is_suppressed(result.top_class)) {
-        result.suppressed = true;
-        std::cout << "[SUPPRESS] " << result.top_class
-                  << " remaining: "
-                  << cv::format("%.1f", cooldown.remaining_sec(result.top_class))
-                  << "s\n" << std::flush;
-    }
-
-    const std::string vote_input = result.suppressed ? "" : result.top_class;
-    voter.update(vote_input);
+    // cutover 2026-06-17: voter ป้อนด้วย top_class ดิบเสมอ (ไม่ผ่าน voter-input cooldown อีก)
+    // → confirm ไหลตาม detection cadence จริง; anti-spam ย้ายไป L3 ทั้งหมด
+    voter.update(result.top_class);
     result.vote = voter.evaluate();
 
-    if (!result.top_class.empty() && !result.suppressed) {
+    if (!result.top_class.empty()) {
         std::cout << "[DET F" << frame_index << "]"
                   << " class=" << result.top_class
                   << " conf=" << cv::format("%.2f", result.top_conf)
@@ -529,27 +469,15 @@ static DecisionResult run_decision(
 
         roi_by_class.clear();   // เคลียร์ ROI ทุก class — เริ่ม window ใหม่ พร้อม voter.reset()
 
-        cooldown.activate(output);
-        auto it = cooldown.class_cooldowns.find(output);
-        float cd = (it != cooldown.class_cooldowns.end())
-                   ? it->second : cooldown.default_cooldown_sec;
-        std::cout << "\n[CONFIRMED] >>> " << output
-                  << " | cooldown: " << cv::format("%.1f", cd) << "s\n\n"
-                  << std::flush;
-
-        confirmed_value = output;   // CLS-corrected → ป้อน shadow pipeline (read-only)
+        // cutover 2026-06-17: legacy [CONFIRMED] + cooldown.activate() removed.
+        // CLS correction above stays (computes the value); the announce/suppress
+        // decision is now entirely L3's (see pipeline.tick below).
+        confirmed_value = output;   // CLS-corrected → ป้อน L1/L2/L3 pipeline
     }
 
     times.vote_ms = timer.toc_ms();
 
-    // ── Step 2: voter-winner lifecycle (SHADOW, เก็บไว้เทียบ) ────────
-    // ป้อนด้วยผลจาก voter/cooldown ปัจจุบัน → [LC-SHADOW]
-    // ทิ้งค่า return: ไม่กระทบการตัดสินใจ (run_decision/cooldown/classifier/voter ยังเป็น authority)
-    lifecycle.update(result.top_class, result.suppressed,
-                     result.vote.confirmed, result.vote.winner,
-                     frame_index);
-
-    // ── Step 3: L1/L2/L3 shadow pipeline ([SHADOW][L3]) ─────────────
+    // ── L1/L2/L3 pipeline ([SHADOW][L3]) — AUTHORITY after cutover ──
     // presence = RAW class-agnostic speed-sign presence จาก detections ทั้งหมด
     //   (ไม่ผ่าน cooldown, ไม่ใช่แค่ top_class — เป็นข้อเท็จจริงเชิง perception)
     if (shadow_enabled) {
@@ -794,7 +722,6 @@ int main(int argc, char** argv) {
         }
 
         TimingAverages avg(cfg.avg_window);
-        CooldownManager cooldown;
         TemporalVoter   voter(10, 4);
 
         // ROI ต่อ class — เก็บ crop คมชัดที่สุดของแต่ละ class ระหว่าง voting window
@@ -835,11 +762,7 @@ int main(int argc, char** argv) {
                       << "  min_conf: " << cfg.cls_min_conf << "\n";
         }
 
-        // Step 2 (SHADOW): voter-winner lifecycle เดิม — เก็บไว้เทียบ [LC-SHADOW]
-        // ไม่มี authority. จะถูกลบหลัง shadow validation ผ่านบน Pi
-        SpeedSignLifecycle lifecycle(classifier_ptr);
-
-        // Step 3 (SHADOW): L1/L2/L3 pipeline — [SHADOW][L3], log-only, behind --shadow
+        // L1/L2/L3 pipeline — [SHADOW][L3], the speed AUTHORITY after cutover 2026-06-17.
         // Step 4: facade ถือ L4 NotificationManager (audio thread สร้างเฉพาะตอน --audio)
         // tick ถูกเรียกใน run_decision (main thread เท่านั้น) → L1/L2/L3 ไม่ต้อง lock
         ShadowSpeedLimitPipeline pipeline(
@@ -852,7 +775,7 @@ int main(int argc, char** argv) {
             cfg.audio_device
         );
         if (cfg.shadow) {
-            std::cout << "[SHADOW] L1/L2/L3 pipeline ON"
+            std::cout << "[SPEED] L1/L2/L3 pipeline ON (authority)"
                       << " (K=" << cfg.shadow_k
                       << ", rearm=" << cfg.shadow_rearm_ms << "ms"
                       << ", reminder=" << cfg.shadow_reminder_sec << "s)\n";
@@ -861,8 +784,7 @@ int main(int argc, char** argv) {
             std::cout << "[AUDIO] ON (dir=" << cfg.audio_dir
                       << ", device=" << cfg.audio_device << ")\n";
             if (!cfg.shadow) {
-                std::cout << "[AUDIO] WARNING: --audio needs --shadow to produce sound"
-                             " (shadow tick is off → silent)\n";
+                std::cout << "[AUDIO] WARNING: speed pipeline is off → silent\n";
             }
         }
 
@@ -959,8 +881,7 @@ int main(int argc, char** argv) {
                 if (async_detector->try_take_result(detection)) {
                     times = detection.times;
                     run_decision(detection.detections, detection.frame_bgr,
-                                 cooldown, voter, classifier_ptr, roi_by_class,
-                                 lifecycle,
+                                 voter, classifier_ptr, roi_by_class,
                                  pipeline, cfg.shadow,
                                  cfg.roi_debug_dir,
                                  detection.frame_index, times);
@@ -997,8 +918,7 @@ int main(int argc, char** argv) {
                 detection.result_ready_time = Clock::now();
 
                 run_decision(detection.detections, frame_bgr,
-                             cooldown, voter, classifier_ptr, roi_by_class,
-                             lifecycle,
+                             voter, classifier_ptr, roi_by_class,
                              pipeline, cfg.shadow,
                              cfg.roi_debug_dir,
                              frame_index, times);

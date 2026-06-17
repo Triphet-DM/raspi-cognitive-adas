@@ -88,8 +88,8 @@ struct AppConfig {
     bool async_detect = false;
     bool async_camera = false;
 
-    // L1/L2/L3 shadow pipeline (Step 3) — log-only, default off
-    bool shadow              = false;   // --shadow: เปิด ShadowSpeedLimitPipeline
+    // L1/L2/L3 pipeline (Step 3) — AUTHORITY after cutover 2026-06-17 (default ON)
+    bool shadow              = true;    // legacy --shadow flag kept as no-op; pipeline is now the authority
     bool shadow_verbose      = false;   // --shadow-verbose: log SUPPRESS ของ shadow ด้วย
     int  shadow_k            = 1;       // --shadow-k: K ของ L2 (>=1)
     int  shadow_rearm_ms     = 600;     // --shadow-rearm-ms: rearm_after ของ L1

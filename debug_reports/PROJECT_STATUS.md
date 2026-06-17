@@ -6,10 +6,14 @@
 
 **Last updated:** 2026-06-17
 **Branch:** `fix-gil`
-**HEAD:** `72bd460 feat(audio): complete L1-L4 shadow pipeline with speaker integration`
-**Remote:** pushed to `origin/fix-gil` (in sync).
+**HEAD:** `d4b858a docs: design meeting + speed investigation + cutover plan` (cutover code
+edits uncommitted in working tree pending the commit).
+**Remote:** `origin/fix-gil` at `001ab58` (local ahead — `d4b858a` + cutover not yet pushed).
 **Direction:** **Cognitive Driver Assistance** — non-speed behavior **architecture FROZEN
-2026-06-15** (see next section). Speed L1–L4 behavior unchanged.
+2026-06-15** (see next section).
+**SPEED CUTOVER DONE + Pi-verified 2026-06-17:** L1–L4 is now the speed authority; legacy
+`CooldownManager`/`[CONFIRMED]`/`SpeedSignLifecycle` removed; anti-spam owned by L3; K≥2 no
+longer blocked by cooldown. Detail in `Current Status`.
 **Perf note (2026-06-16):** speed investigation found **async halves throughput** — run
 production in **SYNC**: ~19 FPS @512 (was ~10 async), CPU 80%→50-60%, zero accuracy/behaviour
 change. int8 ruled out on CPU. Detail: `FP32_SPEED_ENVELOPE.md`, `INT8_AB_RESULTS.md`.
@@ -151,18 +155,23 @@ second-stage model (RF-DETR) · exact suppression params · exact family impleme
 
 ## Current Status
 
-The **L1–L4 belief-state speed-limit subsystem is complete and verified end-to-end on
-Raspberry Pi 5**, including real audio output through the MAX98357A speaker.
+The **L1–L4 belief-state speed-limit subsystem is the speed AUTHORITY — cutover DONE and
+Pi-verified 2026-06-17**, including real audio output through the MAX98357A speaker.
 
 - All four leaves + facade implemented, unit-tested, and Pi-verified; full CMake build
   passes; audio plays the subsystem's decisions on hardware.
-- The subsystem runs in **SHADOW**: the legacy voter/cooldown path is still the
-  **authority** (`[CONFIRMED]`), and **audio follows the shadow L1/L2/L3 decisions only**
-  (`--shadow --audio`). **No authority cutover has happened.**
-- Production behavior with no flags is unchanged.
+- **Authority cutover COMPLETE (2026-06-17):** the legacy `CooldownManager` voter-input
+  suppression and the `[CONFIRMED]`/`SpeedSignLifecycle` path are **removed**; L1/L2/L3 is
+  the authority by default (`cfg.shadow=true`; `--shadow` is now a no-op). **Anti-spam is now
+  owned entirely by L3** (CHANGE-always / REMINDER-on-fresh / SuppressContinuation).
+- **Pi-verified working:** detection + alerts normal, and **K=2 now changes value on the 2nd
+  confirm WITHOUT waiting out the old 5 s cooldown** — the coupling is gone.
+- **Non-speed signs are silent** (no legacy `[CONFIRMED]` print, no audio) until Brain 2 —
+  expected and on-direction.
 
-What remains before cutover: **systematic bench validation** and a **cutover-readiness**
-decision (read `Pending`/`age` telemetry, confirm K=1 vs K=2).
+What remains: **K=1 vs K=2 final choice** (now a free, measured tuning — both behave as
+designed); decide via `Pending`/`age` telemetry. A4 housekeeping: drop the orphaned
+`SpeedSignLifecycle.{h,cpp}` from CMake + delete the files.
 
 ---
 
@@ -255,7 +264,10 @@ non-preemptive within category, audio only on `is_announce`.
    voter-input cooldown — until then K≥2 is artificially blocked.)*
 3. **Authority cutover readiness** evaluation (honor invariants R3–R5 below).
 
-### Cutover plan — remove voter-input suppression (drafted 2026-06-17)
+### Cutover — remove voter-input suppression ✅ DONE + Pi-verified 2026-06-17
+> Implemented in `main.cpp` + `Types.h` (−107/+27). Pi run: detection/alerts normal,
+> K=2 changes value on the 2nd confirm with no 5 s wait, no audio spam. The plan below is
+> kept as the record of what was changed.
 **Why:** one shared `TemporalVoter` is fed cooldown-gated input → contaminates the shadow
 confirm signal → K≥2 can't fire within 5 s. Can't fix in isolation: the same voter feeds the
 legacy `[CONFIRMED]` path, which *relies* on cooldown for its own anti-spam → must move
@@ -330,17 +342,12 @@ gates (rearm, reminder, suppression windows) unaffected — keep "stay quiet" se
 - **`classify_ms` (Bug #3, LOW)** — diagnosed as rolling-average dilution (only the
   sparse confirm frame is nonzero), **not** a classifier skip. Metric still misleading.
 - **TemporalVoter tie-break (Bug #4, LOW)** — alphabetical, not recency. Keep orthogonal.
-- **K≥2 blocked by voter-input cooldown (bench-confirmed 2026-06-17, NOT a bug)** — with
-  `--shadow-k 2` a value change does **not** announce on first sight; it waits out the 5 s
-  cooldown. Root cause: one **shared** `TemporalVoter` is fed cooldown-gated input
-  (`main.cpp:465` `vote_input = suppressed ? "" : top_class`). After the 1st confirm,
-  `cooldown.activate()` (`main.cpp:532`) zeroes that class's vote input for 5 s, so L2 can
-  never collect the 2nd consecutive confirm K≥2 needs until cooldown lifts. **K=1 hides it**
-  (L2 commits on the 1st confirm). **Fix = the documented cutover step "remove voter-input
-  suppression; L3 owns anti-spam"** — de-contaminates the confirm signal so K≥2 works at the
-  raw (sync ~2×) frame cadence. The shadow path's `presence` is already RAW/clean
-  (`main.cpp:556-562`); only the `confirmed`/`value` signal is contaminated. **Does not need
-  Brain 2.** See cutover plan in `Approved Direction` + R3–R5.
+- **K≥2 blocked by voter-input cooldown — ✅ RESOLVED by cutover 2026-06-17.** Root cause was
+  one **shared** `TemporalVoter` fed cooldown-gated input: after the 1st confirm,
+  `cooldown.activate()` zeroed that class's vote input for 5 s, so L2 never got the 2nd
+  consecutive confirm K≥2 needs. Cutover removed the voter-input suppression (voter now fed
+  raw `top_class`); Pi-verified K=2 changes value on the 2nd confirm with no 5 s wait. Anti-spam
+  moved to L3. **K=1 vs K=2 is now a free, measured tuning choice — no longer a coupling.**
 - **`rearm_after` vs cooldown interaction (R6)** — occlusion >600 ms during cooldown
   re-arms L1 → next confirm `fresh=TRUE`. Measure at bench; don't pre-tune.
 - **Cutover invariants (R3–R5)** — `reset()` must not be wired to presence loss;
