@@ -75,7 +75,7 @@ struct AppConfig {
     std::string ncnn_input_name = "in0";
     std::string ncnn_output_name = "out0";
     int imgsz = 512;
-    float conf_threshold = 0.25f;
+    float conf_threshold = 0.45f;
     float iou_threshold = 0.45f;
     int threads = 2;
     int camera_width = 960;
@@ -91,7 +91,7 @@ struct AppConfig {
     // L1/L2/L3 pipeline (Step 3) — AUTHORITY after cutover 2026-06-17 (default ON)
     bool shadow              = true;    // legacy --shadow flag kept as no-op; pipeline is now the authority
     bool shadow_verbose      = false;   // --shadow-verbose: log SUPPRESS ของ shadow ด้วย
-    int  shadow_k            = 1;       // --shadow-k: K ของ L2 (>=1)
+    int  shadow_k            = 2;       // --shadow-k: K ของ L2 (>=1)
     int  shadow_rearm_ms     = 600;     // --shadow-rearm-ms: rearm_after ของ L1
     int  shadow_reminder_sec = 180;     // --shadow-reminder-sec: reminder cooldown ของ L3
 
