@@ -1,0 +1,2 @@
+# Datasets / large binary assets — keep out of git (use cloud or git-lfs if needed)
+test/
