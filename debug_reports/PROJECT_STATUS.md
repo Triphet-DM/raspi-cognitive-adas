@@ -6,14 +6,18 @@
 
 **Last updated:** 2026-06-17
 **Branch:** `fix-gil`
-**HEAD:** `d4b858a docs: design meeting + speed investigation + cutover plan` (cutover code
-edits uncommitted in working tree pending the commit).
-**Remote:** `origin/fix-gil` at `001ab58` (local ahead — `d4b858a` + cutover not yet pushed).
+**HEAD:** `4693470 feat(decision): wire Brain 2 momentary engine end-to-end with audio`
+**Remote:** pushed to `origin/fix-gil` (in sync). Working tree CLEAN.
 **Direction:** **Cognitive Driver Assistance** — non-speed behavior **architecture FROZEN
 2026-06-15** (see next section).
 **SPEED CUTOVER DONE + Pi-verified 2026-06-17:** L1–L4 is now the speed authority; legacy
-`CooldownManager`/`[CONFIRMED]`/`SpeedSignLifecycle` removed; anti-spam owned by L3; K≥2 no
-longer blocked by cooldown. Detail in `Current Status`.
+`CooldownManager`/`[CONFIRMED]`/`SpeedSignLifecycle` removed; anti-spam owned by L3; K=2 default;
+K≥2 no longer blocked by cooldown.
+**BRAIN 2 BRING-UP 2026-06-17 + Pi-verified:** MomentaryEngine + MomentaryPolicy +
+BehaviorPolicyRouter built & wired; shared L4 extracted (#1) + class→wav `MomentaryAudioMap`
+(#2); 10 momentary WAVs recorded; **momentary speech audible on Pi.** Safety re-ranked: School
+Zone 30 > Ped Warning 25 > Ped Crossing 20 (=threshold). **Remaining: Notification Arbiter + #3.**
+Detail: `2026-06-17_session_report.md`.
 **Perf note (2026-06-16):** speed investigation found **async halves throughput** — run
 production in **SYNC**: ~19 FPS @512 (was ~10 async), CPU 80%→50-60%, zero accuracy/behaviour
 change. int8 ruled out on CPU. Detail: `FP32_SPEED_ENVELOPE.md`, `INT8_AB_RESULTS.md`.
@@ -59,9 +63,12 @@ One policy field collapses the old `priority` + `interrupt_level`:
   new classes insert at one number, nothing else moves.
 
 ### Full attention ranking (structure LOCKED; numbers PROVISIONAL — tune at bench)
-Pedestrian Crossing 30 · Pedestrian Warning 25 · **School Zone 20 = threshold** · Speed
+**Safety re-ranked 2026-06-17 (Thai road-safety research):** **School Zone 30** · Pedestrian
+Warning 25 · **Pedestrian Crossing 20 = threshold** (now the lowest safety rank) · Speed
 CHANGE 12 · Curve Ahead 10 · Crossroad/Traffic Signal 8 · No Parking/U-turn/Stop/Passing 4
-· Speed REMINDER 2. **Speed outputs share the channel and carry ranks too.**
+· Speed REMINDER 2. School zone = highest systemic risk (kids + sight-line occlusion). All 3
+safety ≥ threshold (interrupt-capable); only numbers changed, structure untouched. **Speed
+outputs share the channel and carry ranks too.**
 
 ### Three temporal mechanisms (renamed; different natures — do not call all "cooldown")
 **Detection Stability Window** = K/N **frames** (count, not time) · **Persistent Reminder
@@ -221,14 +228,14 @@ non-preemptive within category, audio only on `is_announce`.
 
 ## Working Tree
 
-- **HEAD `72bd460`, clean, in sync with `origin/fix-gil`.**
-- `72bd460` bundled the full L1–L4 working tree (4 decision sources + facade + 2 audio
-  sources + 5 tests + 10 WAV assets + `main.cpp`/`Types.h`/CMake edits) **plus** the
-  2026-06-09 report and a then-stale copy of this file.
-- 2026-06-10: this file repaired + `2026-06-10_session_report.md` added (the only new
-  repo content).
-- Old `SpeedSignLifecycle.{h,cpp}` retained and compiled — kept as the `[LC-SHADOW]`
-  comparison baseline; remove only after validation.
+- **HEAD `4693470`, CLEAN, in sync with `origin/fix-gil`.**
+- 2026-06-17 commits (oldest→newest): `4cc4165` cutover · `50e994b` K=2 default · `0c49ec5`
+  extract shared L4 · `2c06d59` MomentaryEngine+MomentaryPolicy · `4693470` Brain 2 wired +
+  audio. (Earlier `d4b858a` = docs snapshot.)
+- Brain 2 sources now in CMake: `MomentaryPolicy.cpp`, `MomentaryEngine.cpp`,
+  `BehaviorPolicyRouter.cpp`, `MomentaryAudioMap.cpp`. 10 momentary WAVs in `assets/audio/`.
+- **Orphaned `SpeedSignLifecycle.{h,cpp}` still compiled** (legacy `[LC-SHADOW]` baseline,
+  now unused) — A4 housekeeping: delete files + CMake entry. Harmless for now.
 
 ---
 
@@ -359,54 +366,40 @@ gates (rearm, reminder, suppression windows) unaffected — keep "stay quiet" se
 
 ## Next Immediate Tasks
 
-**Two parallel workstreams now:**
+*Speed (PersistentState):* ✅ DONE — cutover + bench + K=2 decided + Pi-verified. (Optional:
+A4 housekeeping = delete orphaned `SpeedSignLifecycle`.)
 
-*Speed (PersistentState, existing):*
-1. Run the 5 bench validation scenarios; capture logs + audio behavior.
-2. Measure `Pending`/`age`; decide K and age-display threshold.
-3. Decide authority cutover readiness.
-
-*Non-speed families (new direction — behavior-first):*
-4. **Behavior Simulation Round 2** (NOT architecture yet): Scenario A (School_Zone, no
-   end-of-zone sign @ 80 km/h), Scenario B (Pedestrian_crossing drops 200 ms then
-   reappears 500 ms — same vs new episode), Scenario C (5 signs, suppress 4, driver
-   misses a real prohibition — acceptable?).
-5. Measure **per-class precision of the Safety family** (gates "low suppression").
-6. Only after 4–5: design `SignTypeRouter` + `Priority Arbiter`.
+*Brain 2 (Momentary) — next:*
+1. **Notification Arbiter** (stateful, cross-brain): SELECT highest `attention_rank`;
+   PREEMPT iff `incoming.rank > current.rank AND incoming.rank ≥ INTERRUPT_THRESHOLD`. Route
+   BOTH speed + momentary through it → replace the **interim direct-submit** to the shared L4.
+2. **Refactor #3** = kill-aplay preempt + **interrupt-awareness** (Arbiter→engine "clip
+   preempted" feedback) + **Delivery Completeness re-delivery** (re-announce a clip cut
+   mid-sentence; re-announce = L3-level, do NOT touch L1 re-arm).
+3. **Bench-tune** `MomentaryPolicy` numbers (windows/ranks) + measure **per-class precision of
+   the Safety family** (gates "low suppression").
 
 ---
 
 ## Resume Point For Next Session
 
-- **Read:** this file, then `FP32_SPEED_ENVELOPE.md` + `INT8_AB_RESULTS.md` (2026-06-16 speed
-  investigation — async/sync, imgsz, int8), then `2026-06-15_session_report.md` (non-speed
-  architecture FROZEN), then `2026-06-14_session_report.md` (behavior laws + Q1–Q8), then
-  `2026-06-10_session_report.md` (speed L1–L4 detail).
-- **Perf action items (2026-06-16):** (1) ✅ **bench soak PASSED** — sync ran 20 min (+5 min
-  earlier) on Pi, behaviour/detection/alerts normal, no GIL hang, no thermal throttle. Real-drive
-  soak still recommended before final sign-off, but code/GIL stability is proven. (2) **sync is now the
-  way to launch** — currently started by hand, so just omit `--async-detect --async-camera`
-  (sync is already the code default). **Future autostart (systemd on power-up, deferred): the
-  `ExecStart` MUST NOT include the async flags** — do not copy an old async command, or the 2×
-  speedup is silently lost. (3) optionally adopt imgsz 416 for ~30 FPS. Code unchanged (the int8 `--det-int8` experiment was
-  fully reverted); this is launch-flag only.
-- **Non-speed architecture FROZEN (2026-06-15):** two-brain (Persistent / Momentary);
-  BehaviorPolicyRouter; Momentary timestamp model (no episode lifecycle); `attention_rank`
-  single axis; INTERRUPT_THRESHOLD = Safety Boundary (re-derives Law 2); cross-engine
-  ranking (structure locked, numbers provisional); 3 integration refactors. **Architecture
-  phase complete → next is measurement, not design.** Do NOT re-open
-  priority/interrupt_level/can_preempt; do NOT add episode lifecycle to momentary signs; do
-  NOT fix scale numbers from assumption; do NOT design as if perception is perfect.
-- *(Speed-subsystem resume notes below — unchanged.)*
-- **Finished:** L1–L4 complete + Pi-verified end-to-end + audio on hardware; pushed
-  `72bd460`/`origin/fix-gil`. Shadow only — legacy authority intact.
-- **In progress / next:** systematic bench validation (esp. scenario 2 = legacy repeats
-  vs shadow silent), telemetry read for K, cutover-readiness evaluation. Use
-  `--shadow --audio` (lower `--shadow-reminder-sec` for the bench).
-- **Do NOT:** cut over authority before bench passes; delete old `SpeedSignLifecycle`
-  yet; add interfaces/inheritance/event-bus/DI/generics; implement STALE; build
-  cross-category audio priority; tune road-dependent params from assumptions.
-- **Decided already:** authority split, no-forget, K=1 default, CHANGE-always/
-  REMINDER-on-fresh, reminder cooldown 180 s benign, STALE cut, gapless-by-value-axis,
-  raw class-agnostic presence, single-slot latest-wins, `aplay` v1, audio
-  non-authoritative behind `--audio`+`--shadow`, object boundaries.
+- **Read:** this file, then `2026-06-17_session_report.md` (cutover + Brain 2 bring-up), then
+  `2026-06-15_session_report.md` (Brain 2 architecture FROZEN), then
+  `2026-06-14_session_report.md` (behavior laws + Q1–Q8). Older: `FP32_SPEED_ENVELOPE.md` /
+  `INT8_AB_RESULTS.md` (06-16 speed perf), `2026-06-10_session_report.md` (speed L1–L4 detail).
+- **Finished (Pi-verified, pushed `origin/fix-gil`):** speed cutover (L1–L4 = authority, L3
+  anti-spam, K=2 default); shared L4 (#1); Brain 2 core (MomentaryEngine + MomentaryPolicy +
+  BehaviorPolicyRouter); class→wav `MomentaryAudioMap` (#2); 10 momentary WAVs; **momentary
+  speech audible on Pi**; safety re-ranked (School Zone 30 > Ped Warning 25 > Ped Crossing 20).
+- **In progress / next:** **Notification Arbiter** (stateful cross-brain SELECT/PREEMPT) →
+  route both brains through it, replacing the **interim direct-submit** to the shared L4. Then
+  **refactor #3** (kill-aplay preempt + interrupt-awareness + Delivery Completeness
+  re-delivery). Then bench-tune `MomentaryPolicy` numbers + measure Safety-family precision.
+- **Do NOT:** re-open `attention_rank`/threshold structure (only numbers tune); add an episode
+  lifecycle to momentary; touch L1 re-arm for re-delivery (it's an L3-level re-announce); fix
+  `MomentaryPolicy` numbers from assumption; wire `reset()` to presence loss; break the
+  single-threaded `tick()`; add interfaces/inheritance/event-bus/DI/generics.
+- **Decided already:** L1–L4 authority + L3 anti-spam; **K=2 default**; imgsz **512** locked;
+  sync (no async); two-brain; Momentary timestamp model (no lifecycle); single `attention_rank`
+  axis; INTERRUPT_THRESHOLD = lowest safety rank (= Ped Crossing after re-rank); shared generic
+  L4 (`submit(filename)`); single-slot latest-wins; `aplay` v1.
