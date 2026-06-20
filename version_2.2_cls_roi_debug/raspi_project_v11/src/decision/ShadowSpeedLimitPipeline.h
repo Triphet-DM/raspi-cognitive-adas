@@ -24,7 +24,8 @@
 #include "decision/SignEpisodeLifecycle.h"
 #include "decision/CurrentSpeedLimitManager.h"
 #include "decision/AnnouncementPolicy.h"
-#include "audio/NotificationManager.h"   // L4: ส่งเสียงตาม announce action
+#include "decision/NotificationArbiter.h"   // cross-brain attention scheduler (ก่อนถึง L4)
+#include "audio/NotificationManager.h"      // L4: ส่งเสียงตาม announce action
 
 class ShadowSpeedLimitPipeline {
 public:
@@ -35,11 +36,14 @@ public:
     // nm = shared L4 (owned externally; one audio output for both brains via the Arbiter
     //      later). nullptr = no audio sink wired. The NotificationManager's own enabled_
     //      flag still decides no-op when --audio is off.
+    //   arb = cross-brain Notification Arbiter (owned externally, shared with Brain 2).
+    //         nullptr = ไม่ wire arbiter → speed ส่งตรงเข้า nm (พฤติกรรมเดิมก่อน Arbiter).
     ShadowSpeedLimitPipeline(int k,
                              Millis rearm_after,
                              Millis reminder_cooldown,
                              bool   verbose,
-                             NotificationManager* nm);
+                             NotificationManager* nm,
+                             NotificationArbiter* arb);
 
     // เรียกทุก processed frame (main thread เท่านั้น)
     //   presence        : เห็นป้าย speed ใด ๆ ในเฟรมนี้ไหม (RAW, class-agnostic)
@@ -58,5 +62,6 @@ private:
     CurrentSpeedLimitManager l2_;
     AnnouncementPolicy       l3_;
     bool                     verbose_;
-    NotificationManager*     nm_;   // shared L4 — NOT owned (lives in main, fed by both brains)
+    NotificationManager*     nm_;    // shared L4 — NOT owned (lives in main, fed by both brains)
+    NotificationArbiter*     arb_;   // cross-brain scheduler — NOT owned (shared with Brain 2)
 };

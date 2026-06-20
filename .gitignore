@@ -7,3 +7,6 @@ test/
 
 # Audio assets (WAV) — re-recorded as needed, kept local only
 *.wav
+
+# Build artifacts
+*.exe

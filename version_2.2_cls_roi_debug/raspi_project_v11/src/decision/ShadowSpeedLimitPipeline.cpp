@@ -1,6 +1,7 @@
 #include "decision/ShadowSpeedLimitPipeline.h"
 
 #include "inference/SpeedSignClassifier.h"   // speed_sign_group() — single source of truth
+#include "audio/SpeedAudioMap.h"             // (action,value) -> ชื่อไฟล์ (เคยเรียกผ่าน nm_->notify)
 
 #include <iostream>
 #include <utility>   // std::move
@@ -9,12 +10,26 @@ ShadowSpeedLimitPipeline::ShadowSpeedLimitPipeline(int k,
                                                    Millis rearm_after,
                                                    Millis reminder_cooldown,
                                                    bool   verbose,
-                                                   NotificationManager* nm)
+                                                   NotificationManager* nm,
+                                                   NotificationArbiter* arb)
     : l1_(rearm_after),
       l2_(k),
       l3_(reminder_cooldown),
       verbose_(verbose),
-      nm_(nm) {}
+      nm_(nm),
+      arb_(arb) {}
+
+namespace {
+// Speed attention ranks (จาก attention scale รวม; ทั้งคู่ < INTERRUPT_THRESHOLD(20)
+//   → speed ไม่มีวัน preempt ใคร: persistent state re-derive ได้). PROVISIONAL — bench-tune.
+constexpr int SPEED_RANK_CHANGE   = 12;
+constexpr int SPEED_RANK_REMINDER = 2;
+
+int speed_rank(AnnouncementPolicy::Action a) {
+    // มาถึงนี่เฉพาะ announce action (Change/Reminder); อื่น ๆ ไม่ส่งเสียงอยู่แล้ว
+    return a == AnnouncementPolicy::Action::Change ? SPEED_RANK_CHANGE : SPEED_RANK_REMINDER;
+}
+}  // namespace
 
 bool ShadowSpeedLimitPipeline::is_speed(const std::string& cls) {
     return !cls.empty() &&
@@ -64,10 +79,21 @@ void ShadowSpeedLimitPipeline::tick(bool presence,
     const bool announce = AnnouncementPolicy::is_announce(action);
 
     // L4 (shared, external): ส่งเสียงเฉพาะ announce action (Change/Reminder); Suppress -> เงียบ
-    //   no-op ถ้า --audio ปิด (nm_->enabled_=false) หรือไม่มี sink (nm_==nullptr).
-    //   value = belief ปัจจุบันของ L2
-    if (announce && l2_.current() && nm_) {
-        nm_->notify(action, *l2_.current());
+    //   route ผ่าน Arbiter (cross-brain) ก่อนถึง L4 → speed/momentary ตัดสินด้วย rank ร่วมกัน
+    //   ไม่ใช่ last-wins. speed rank < 20 → Arbiter จะไม่ให้ speed preempt safety ที่เล่นอยู่
+    //   (ถูก DROP) — ถูกต้องตามดีไซน์. no-op ถ้า --audio ปิด (nm_->enabled_=false).
+    const char* arb_str = "-";   // ผล arbiter สำหรับ log (ช่วย diagnose reminder/preempt)
+    if (announce && l2_.current()) {
+        const std::string file = SpeedAudioMap::filename(action, *l2_.current());
+        if (arb_) {
+            const auto ar = arb_->submit(speed_rank(action), file, now);
+            arb_str = ar.decision == NotificationArbiter::Decision::Play    ? "PLAY"    :
+                      ar.decision == NotificationArbiter::Decision::Preempt ? "PREEMPT" : "DROP";
+            if (NotificationArbiter::plays(ar.decision) && nm_) nm_->submit(ar.filename);
+        } else if (nm_) {
+            arb_str = "DIRECT";
+            nm_->submit(file);   // ไม่มี arbiter wired → ส่งตรง (พฤติกรรมเดิม)
+        }
     }
 
     // ประกาศจริง (CHANGE/REMINDER) log เสมอ; SUPPRESS log เฉพาะ --shadow-verbose
@@ -79,6 +105,7 @@ void ShadowSpeedLimitPipeline::tick(bool presence,
                   << ", fresh=" << (ep.fresh ? "T" : "F")
                   << ", belief=" << belief
                   << ", age=" << age_before.count() << "ms)"
+                  << " arb=" << arb_str
                   << " F" << frame_index << "\n" << std::flush;
     }
 }

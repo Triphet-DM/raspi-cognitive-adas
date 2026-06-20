@@ -28,6 +28,7 @@
 #include "decision/ShadowSpeedLimitPipeline.h"
 #include "decision/BehaviorPolicyRouter.h"    // Brain 2 dispatch (after confirm)
 #include "decision/MomentaryEngine.h"         // Brain 2 — momentary (non-speed) signs
+#include "decision/NotificationArbiter.h"     // cross-brain attention scheduler (front door of L4)
 #include "utils/Timer.h"
 #include "utils/Types.h"
 #include "vision/Draw.h"
@@ -380,7 +381,8 @@ static DecisionResult run_decision(
     std::map<std::string, BestROI>& roi_by_class,
     ShadowSpeedLimitPipeline& pipeline,   // L1/L2/L3 — AUTHORITY ([SHADOW][L3])
     MomentaryEngine& momentary,           // Brain 2 — non-speed momentary signs
-    NotificationManager& notifier,        // shared L4 (interim: momentary submits direct)
+    NotificationManager& notifier,        // shared L4 (effect: ส่งเสียงเมื่อ Arbiter อนุญาต)
+    NotificationArbiter& arbiter,         // cross-brain scheduler: ตัดสิน play/preempt/drop ด้วย rank
     bool shadow_enabled,
     const std::string& roi_debug_dir,   // "" = disabled, path = save crops
     int frame_index,
@@ -485,13 +487,19 @@ static DecisionResult run_decision(
         // cross-brain arbitration come with refactor #2 + Notification Arbiter.
         // (speed handled by pipeline.tick below; None = unknown class → ignore)
         if (BehaviorPolicyRouter::route(output) == BehaviorPolicyRouter::Brain::Momentary) {
-            const auto m = momentary.onConfirmed(output, Clock::now());
+            const TimePoint now = Clock::now();
+            const auto m = momentary.onConfirmed(output, now);
             if (MomentaryEngine::is_announce(m.decision)) {
-                std::cout << "[MOMENTARY] ANNOUNCE " << m.cls
+                // engine ตัดสิน "ควรพูดไหม" แล้ว → Arbiter ตัดสิน "ได้ช่องไหม" ด้วย rank ร่วมสองสมอง
+                const auto ar = arbiter.submit(m.attention_rank,
+                                               MomentaryAudioMap::filename(m.cls), now);
+                const char* act =
+                    ar.decision == NotificationArbiter::Decision::Play    ? "PLAY"    :
+                    ar.decision == NotificationArbiter::Decision::Preempt ? "PREEMPT" : "DROP";
+                std::cout << "[MOMENTARY] " << act << " " << m.cls
                           << " rank=" << m.attention_rank
                           << " F" << frame_index << "\n" << std::flush;
-                // interim (ยังไม่มี Arbiter): ส่งเข้า shared L4 ตรง ๆ. ไฟล์หาย -> เงียบ
-                notifier.submit(MomentaryAudioMap::filename(m.cls));
+                if (NotificationArbiter::plays(ar.decision)) notifier.submit(ar.filename);
             }
             // SUPPRESS = เงียบ (ไม่ log กัน spam ตอนป้ายค้างในเฟรม)
         }
@@ -790,15 +798,23 @@ int main(int argc, char** argv) {
         // Must outlive `pipeline` (declared first; same scope).
         NotificationManager notifier(cfg.audio_dir, cfg.audio_device, cfg.audio);
 
+        // Notification Arbiter — cross-brain attention scheduler นั่งหน้า shared L4.
+        // ทั้ง speed (pipeline) และ momentary (run_decision) route ผ่านตัวนี้ → ตัดสิน
+        // play/preempt/drop ด้วย attention_rank ร่วมกัน (แทน interim direct-submit / last-wins).
+        // busy-window = nominal_clip default (2.5s, scaffold); feedback จริง + re-deliver มากับ #3.
+        // Must outlive `pipeline` (declared first; same scope).
+        NotificationArbiter arbiter;
+
         // L1/L2/L3 pipeline — [SHADOW][L3], the speed AUTHORITY after cutover 2026-06-17.
-        // Feeds the shared L4 via pointer (no longer owns it).
+        // Feeds the shared L4 via the Arbiter (no longer owns L4, no longer submits direct).
         // tick ถูกเรียกใน run_decision (main thread เท่านั้น) → L1/L2/L3 ไม่ต้อง lock
         ShadowSpeedLimitPipeline pipeline(
             cfg.shadow_k,
             std::chrono::milliseconds(cfg.shadow_rearm_ms),
             std::chrono::seconds(cfg.shadow_reminder_sec),
             cfg.shadow_verbose,
-            &notifier
+            &notifier,
+            &arbiter
         );
 
         // Brain 2 — Momentary engine (non-speed signs). LOG-ONLY for now: routed by
@@ -913,7 +929,7 @@ int main(int argc, char** argv) {
                     times = detection.times;
                     run_decision(detection.detections, detection.frame_bgr,
                                  voter, classifier_ptr, roi_by_class,
-                                 pipeline, momentary, notifier, cfg.shadow,
+                                 pipeline, momentary, notifier, arbiter, cfg.shadow,
                                  cfg.roi_debug_dir,
                                  detection.frame_index, times);
 
@@ -950,7 +966,7 @@ int main(int argc, char** argv) {
 
                 run_decision(detection.detections, frame_bgr,
                              voter, classifier_ptr, roi_by_class,
-                             pipeline, momentary, notifier, cfg.shadow,
+                             pipeline, momentary, notifier, arbiter, cfg.shadow,
                              cfg.roi_debug_dir,
                              frame_index, times);
 

@@ -23,6 +23,7 @@ add_executable(app
     src/decision/MomentaryPolicy.cpp
     src/decision/MomentaryEngine.cpp
     src/decision/BehaviorPolicyRouter.cpp
+    src/decision/NotificationArbiter.cpp
     src/audio/SpeedAudioMap.cpp
     src/audio/MomentaryAudioMap.cpp
     src/audio/NotificationManager.cpp
