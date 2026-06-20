@@ -5,13 +5,15 @@
 NotificationArbiter::NotificationArbiter(Millis nominal_clip)
     : nominal_clip_(nominal_clip) {}
 
-void NotificationArbiter::take_channel(int rank, TimePoint now) {
-    current_rank_ = rank;
-    busy_until_   = now + nominal_clip_;
+void NotificationArbiter::take_channel(int rank, bool eligible, TimePoint now) {
+    current_rank_     = rank;
+    current_eligible_ = eligible;
+    busy_until_       = now + nominal_clip_;
 }
 
 NotificationArbiter::Result
-NotificationArbiter::submit(int rank, const std::string& filename, TimePoint now) {
+NotificationArbiter::submit(int rank, const std::string& filename, TimePoint now,
+                            bool redeliver_eligible) {
     Result r;
 
     // ไม่มีคลิป → ไม่มีอะไรให้เล่น, ไม่ยึดช่อง (กัน "ยึดช่องเปล่า" บล็อก safety)
@@ -22,7 +24,7 @@ NotificationArbiter::submit(int rank, const std::string& filename, TimePoint now
 
     // SELECTION: ช่องว่าง → หยิบไปเล่น
     if (!busy(now)) {
-        take_channel(rank, now);
+        take_channel(rank, redeliver_eligible, now);
         r.decision = Decision::Play;
         r.filename = filename;
         return r;
@@ -30,7 +32,9 @@ NotificationArbiter::submit(int rank, const std::string& filename, TimePoint now
 
     // PREEMPTION: ช่องไม่ว่าง → แทรกได้เฉพาะ rank สูงกว่า "และ" ถึงเกณฑ์ safety
     if (rank > current_rank_ && rank >= MomentaryPolicy::INTERRUPT_THRESHOLD) {
-        take_channel(rank, now);
+        // คลิปเก่าที่กำลังถูกตัด ถ้าเป็น CHANGE (eligible) → จดไว้ให้ re-deliver เมื่อช่องว่าง
+        if (current_eligible_) redeliver_owed_ = true;
+        take_channel(rank, redeliver_eligible, now);
         r.decision = Decision::Preempt;
         r.filename = filename;
         return r;
@@ -41,7 +45,23 @@ NotificationArbiter::submit(int rank, const std::string& filename, TimePoint now
     return r;
 }
 
+bool NotificationArbiter::poll(TimePoint now) {
+    // L4 ว่างจริงแล้ว → sync ช่องเป็น idle ทันที (ไม่รอ scaffold busy_until_ หมดอายุ)
+    current_rank_     = 0;
+    current_eligible_ = false;
+    busy_until_       = now;   // now >= busy_until_ → busy()==false → idle
+
+    // มี CHANGE ถูก preempt ค้างไหม → คืน true + เคลียร์ธง (re-deliver ครั้งเดียว)
+    if (redeliver_owed_) {
+        redeliver_owed_ = false;
+        return true;
+    }
+    return false;
+}
+
 void NotificationArbiter::reset() {
-    current_rank_ = 0;
-    busy_until_   = TimePoint{};
+    current_rank_     = 0;
+    current_eligible_ = false;
+    redeliver_owed_   = false;
+    busy_until_       = TimePoint{};
 }

@@ -68,6 +68,12 @@ void NotificationManager::notify(Action action, const std::string& value) {
     submit(SpeedAudioMap::filename(action, value));
 }
 
+bool NotificationManager::is_idle() {
+    if (!enabled_) return true;     // ไม่มี audio → ไม่มีอะไรให้รอ
+    std::lock_guard<std::mutex> lock(mutex_);
+    return child_pid_ <= 0 && !has_pending_;   // ไม่มีคลิปเล่นอยู่ + ไม่มีคิวค้าง
+}
+
 void NotificationManager::run() {
     while (true) {
         std::string file;

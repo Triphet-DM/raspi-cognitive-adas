@@ -55,6 +55,10 @@ public:
               int frame_index,
               TimePoint now);
 
+    // re-deliver speed CHANGE ที่ถูก safety ตัดกลางคัน (เรียกจาก main เมื่อ Arbiter.poll คืน true).
+    //   อ่าน belief ปัจจุบันจาก L2 → ประกาศ CHANGE ค่านั้น (Law 4: re-derive ไม่ replay ค่าเก่า)
+    void redeliver(TimePoint now);
+
 private:
     static bool is_speed(const std::string& cls);
 

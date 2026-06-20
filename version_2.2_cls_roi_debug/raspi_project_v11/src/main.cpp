@@ -524,6 +524,12 @@ static DecisionResult run_decision(
                       confirmed_value, frame_index, Clock::now());
     }
 
+    // Re-delivery (cross-brain): ช่องลำโพงว่างจริง (L4 is_idle) + มี speed CHANGE ที่ถูก safety
+    //   ตัดค้างอยู่ → replay จาก belief ปัจจุบันของ L2. เช็คทุกเฟรม (main thread เท่านั้น).
+    if (notifier.is_idle() && arbiter.poll(Clock::now())) {
+        pipeline.redeliver(Clock::now());
+    }
+
     return result;
 }
 

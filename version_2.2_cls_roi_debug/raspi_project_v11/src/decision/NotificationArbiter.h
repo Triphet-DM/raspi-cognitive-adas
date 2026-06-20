@@ -50,20 +50,30 @@ public:
     explicit NotificationArbiter(Millis nominal_clip = Millis(2500));
 
     // ตัดสิน PLAY/PREEMPT/DROP. filename ว่าง → Drop ทันที ไม่แตะ state (ไม่มีคลิปก็ไม่ยึดช่อง)
-    Result submit(int rank, const std::string& filename, TimePoint now);
+    //   redeliver_eligible = true เฉพาะ speed CHANGE → ถ้าคลิปนี้ถูก preempt ภายหลัง จะถูกจดไว้
+    //   ให้ re-deliver (replay) เมื่อช่องว่าง. อื่น ๆ (REMINDER / momentary) = false.
+    Result submit(int rank, const std::string& filename, TimePoint now,
+                  bool redeliver_eligible = false);
+
+    // เรียกจาก main ทุกเฟรม "เมื่อ L4 ว่างจริง" (clip เล่นจบ/ถูกฆ่าแล้ว) → sync Arbiter เป็น idle.
+    //   คืน true ถ้ามี CHANGE ค้างต้อง re-deliver (พร้อมเคลียร์ธง) → caller สั่ง pipeline.redeliver
+    bool poll(TimePoint now);
 
     static bool plays(Decision d) { return d == Decision::Play || d == Decision::Preempt; }
 
     // telemetry / test helpers
     bool busy(TimePoint now) const { return now < busy_until_; }
     int  current_rank() const { return current_rank_; }
+    bool redelivery_owed() const { return redeliver_owed_; }
 
-    void reset();   // คืนสู่ idle (ลืม current)
+    void reset();   // คืนสู่ idle (ลืม current + ธง re-deliver)
 
 private:
-    void take_channel(int rank, TimePoint now);   // ยึดช่อง: ตั้ง current_rank_ + busy_until_
+    void take_channel(int rank, bool eligible, TimePoint now);  // ยึดช่อง: current_rank_/eligible/busy_until_
 
     const Millis nominal_clip_;
-    int          current_rank_ = 0;
+    int          current_rank_     = 0;
+    bool         current_eligible_ = false;  // คลิปที่ครองช่องตอนนี้ re-deliver ได้ไหม (speed CHANGE)
+    bool         redeliver_owed_   = false;  // มี CHANGE ถูก preempt ค้างรอ replay
     TimePoint    busy_until_{};   // idle เมื่อ now >= busy_until_ (ค่า default = epoch = idle ตั้งต้น)
 };

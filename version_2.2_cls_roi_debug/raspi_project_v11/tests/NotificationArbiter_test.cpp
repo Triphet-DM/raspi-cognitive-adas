@@ -178,6 +178,74 @@ static void test_threshold_is_shared() {
     CHECK(MomentaryPolicy::INTERRUPT_THRESHOLD == 20);
 }
 
+// ---- RE-DELIVERY (CHANGE-only) -----------------------------------------
+
+// speed CHANGE (eligible) ถูก safety ตัด → จดไว้ให้ re-deliver
+static void test_eligible_change_preempted_sets_owed() {
+    A a = make();
+    a.submit(12, "change_60.wav", t(0), /*eligible=*/true);   // speed CHANGE กำลังเล่น
+    CHECK(!a.redelivery_owed());
+    auto r = a.submit(20, "ped_crossing.wav", t(300));        // safety preempt
+    CHECK(r.decision == Dec::Preempt);
+    CHECK(a.redelivery_owed());                               // CHANGE ถูกจดให้ replay
+}
+
+// poll คืน owed ครั้งเดียว แล้วเคลียร์ + ทำให้ช่อง idle
+static void test_poll_returns_owed_once_then_idle() {
+    A a = make();
+    a.submit(12, "change_60.wav", t(0), true);
+    a.submit(20, "ped_crossing.wav", t(300));                 // preempt → owed
+    CHECK(a.poll(t(2000)) == true);                           // คืน owed ครั้งแรก
+    CHECK(a.poll(t(2001)) == false);                          // เคลียร์แล้ว
+    CHECK(!a.busy(t(2001)));                                  // poll → idle
+    CHECK(a.current_rank() == 0);
+}
+
+// REMINDER (ไม่ eligible) ถูกตัด → ไม่ re-deliver
+static void test_non_eligible_preempted_no_owed() {
+    A a = make();
+    a.submit(2, "reminder_50.wav", t(0), /*eligible=*/false); // REMINDER
+    a.submit(20, "school.wav", t(300));                        // safety preempt
+    CHECK(!a.redelivery_owed());
+}
+
+// momentary (default eligible=false) ถูก safety สูงกว่าตัด → ไม่ re-deliver
+static void test_momentary_preempted_no_owed() {
+    A a = make();
+    a.submit(20, "ped_crossing.wav", t(0));                    // Ped crossing (default false)
+    a.submit(30, "school.wav", t(300));                        // School preempt
+    CHECK(!a.redelivery_owed());
+}
+
+// poll ตอนไม่มี owed → คืน false แต่ยัง sync idle (ใช้ทุกเฟรมตอน L4 ว่าง)
+static void test_poll_no_owed_still_idle() {
+    A a = make();
+    a.submit(30, "school.wav", t(0));
+    CHECK(a.busy(t(100)));
+    CHECK(a.poll(t(100)) == false);                           // ไม่มี owed
+    CHECK(!a.busy(t(100)));                                    // แต่ idle แล้ว
+}
+
+// re-delivery clip ถ้าถูก safety ตัดอีก → owed อีกครั้ง (eligible chain)
+static void test_redelivery_clip_can_be_owed_again() {
+    A a = make();
+    a.submit(12, "change_60.wav", t(0), true);
+    a.submit(20, "ped.wav", t(100));                          // preempt #1 → owed
+    CHECK(a.poll(t(2000)) == true);                           // re-deliver triggered, idle
+    a.submit(12, "change_60.wav", t(2000), true);             // re-delivery (eligible อีก)
+    a.submit(25, "ped_warning.wav", t(2100));                 // safety ตัด re-delivery อีก
+    CHECK(a.redelivery_owed());                               // ค้าง replay อีกรอบ
+}
+
+static void test_reset_clears_owed() {
+    A a = make();
+    a.submit(12, "c.wav", t(0), true);
+    a.submit(20, "p.wav", t(100));                            // owed
+    CHECK(a.redelivery_owed());
+    a.reset();
+    CHECK(!a.redelivery_owed());
+}
+
 int main() {
     test_idle_plays();
     test_empty_filename_drop();
@@ -194,6 +262,15 @@ int main() {
     test_plays_helper();
     test_default_nominal_clip();
     test_threshold_is_shared();
+
+    // re-delivery
+    test_eligible_change_preempted_sets_owed();
+    test_poll_returns_owed_once_then_idle();
+    test_non_eligible_preempted_no_owed();
+    test_momentary_preempted_no_owed();
+    test_poll_no_owed_still_idle();
+    test_redelivery_clip_can_be_owed_again();
+    test_reset_clears_owed();
 
     std::cout << g_pass << "/" << g_run << " checks passed\n";
     return (g_pass == g_run) ? 0 : 1;

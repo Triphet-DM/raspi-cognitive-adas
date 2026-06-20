@@ -54,6 +54,10 @@ public:
     // speed convenience: (action,value) -> SpeedAudioMap -> submit(). SuppressX/ไม่รู้จัก -> เงียบ
     void notify(Action action, const std::string& value);
 
+    // true = ช่องว่างจริง (ไม่มีคลิปเล่นอยู่ + ไม่มีคิวค้าง). main ใช้ขับ re-delivery.
+    //   เช็คทั้ง child_pid_ และ has_pending_ → ปิดช่วง gap ระหว่าง submit กับ aplay เริ่มจริง
+    bool is_idle();
+
 private:
     using Clock = std::chrono::steady_clock;
 
