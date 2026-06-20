@@ -4,10 +4,11 @@
 > Overwritten whenever a major architectural decision changes.
 > Detailed history lives in the dated session reports in `debug_reports/`.
 
-**Last updated:** 2026-06-17
+**Last updated:** 2026-06-20
 **Branch:** `fix-gil`
-**HEAD:** `4693470 feat(decision): wire Brain 2 momentary engine end-to-end with audio`
-**Remote:** pushed to `origin/fix-gil` (in sync). Working tree CLEAN.
+**HEAD:** `44a735c feat(audio): preempt-kill aplay via posix_spawn for safety interrupt`
+**Remote:** 3 commits ahead of `origin/fix-gil` (unpushed). Working tree has **uncommitted
+re-delivery** (8 files). Models/audio untracked + kept local since 2026-06-20.
 **Direction:** **Cognitive Driver Assistance** — non-speed behavior **architecture FROZEN
 2026-06-15** (see next section).
 **SPEED CUTOVER DONE + Pi-verified 2026-06-17:** L1–L4 is now the speed authority; legacy
@@ -16,8 +17,14 @@ K≥2 no longer blocked by cooldown.
 **BRAIN 2 BRING-UP 2026-06-17 + Pi-verified:** MomentaryEngine + MomentaryPolicy +
 BehaviorPolicyRouter built & wired; shared L4 extracted (#1) + class→wav `MomentaryAudioMap`
 (#2); 10 momentary WAVs recorded; **momentary speech audible on Pi.** Safety re-ranked: School
-Zone 30 > Ped Warning 25 > Ped Crossing 20 (=threshold). **Remaining: Notification Arbiter + #3.**
-Detail: `2026-06-17_session_report.md`.
+Zone 30 > Ped Warning 25 > Ped Crossing 20 (=threshold). Detail: `2026-06-17_session_report.md`.
+**REFACTOR #3 COMPLETE 2026-06-20:** Notification Arbiter wired — both brains route through it
+(commit `e9c8419`); **kill-aplay** via `posix_spawn` — safety interrupts a playing speed clip
+mid-sentence, Pi-verified (commit `44a735c`); **buzzer earcon** (two-beep, Safety-only) baked
+in front of the 3 safety WAVs; **re-delivery (CHANGE-only)** — a preempted speed CHANGE is
+re-announced from **L2 current belief** when the channel frees (L4 `is_idle` + Arbiter `poll`),
+51/51 unit checks, **Pi-working but uncommitted + not yet fully tested.** Repo hygiene: stopped
+tracking models/audio (commit `5401499`). Detail: `2026-06-20_session_report.md`.
 **Perf note (2026-06-16):** speed investigation found **async halves throughput** — run
 production in **SYNC**: ~19 FPS @512 (was ~10 async), CPU 80%→50-60%, zero accuracy/behaviour
 change. int8 ruled out on CPU. Detail: `FP32_SPEED_ENVELOPE.md`, `INT8_AB_RESULTS.md`.
@@ -370,14 +377,14 @@ gates (rearm, reminder, suppression windows) unaffected — keep "stay quiet" se
 A4 housekeeping = delete orphaned `SpeedSignLifecycle`.)
 
 *Brain 2 (Momentary) — next:*
-1. **Notification Arbiter** (stateful, cross-brain): SELECT highest `attention_rank`;
-   PREEMPT iff `incoming.rank > current.rank AND incoming.rank ≥ INTERRUPT_THRESHOLD`. Route
-   BOTH speed + momentary through it → replace the **interim direct-submit** to the shared L4.
-2. **Refactor #3** = kill-aplay preempt + **interrupt-awareness** (Arbiter→engine "clip
-   preempted" feedback) + **Delivery Completeness re-delivery** (re-announce a clip cut
-   mid-sentence; re-announce = L3-level, do NOT touch L1 re-arm).
-3. **Bench-tune** `MomentaryPolicy` numbers (windows/ranks) + measure **per-class precision of
-   the Safety family** (gates "low suppression").
+1. ✅ **Notification Arbiter DONE** (commit `e9c8419`) — both brains route through it.
+2. ✅ **Refactor #3 DONE** — kill-aplay (`44a735c`) + completion-feedback (L4 `is_idle` poll) +
+   **re-delivery (CHANGE-only)** from L2 current belief. Re-delivery is Pi-working but
+   **uncommitted + not fully tested** — finish all-angle test (esp. belief 60→80 mid-safety →
+   must announce 80) then commit.
+3. **Bench-tune** `MomentaryPolicy` numbers (windows/ranks) + reminder/suppression cooldowns
+   (currently test placeholders — user sets production minutes) + measure **per-class precision
+   of the Safety family** (gates "low suppression").
 
 ---
 
@@ -391,10 +398,11 @@ A4 housekeeping = delete orphaned `SpeedSignLifecycle`.)
   anti-spam, K=2 default); shared L4 (#1); Brain 2 core (MomentaryEngine + MomentaryPolicy +
   BehaviorPolicyRouter); class→wav `MomentaryAudioMap` (#2); 10 momentary WAVs; **momentary
   speech audible on Pi**; safety re-ranked (School Zone 30 > Ped Warning 25 > Ped Crossing 20).
-- **In progress / next:** **Notification Arbiter** (stateful cross-brain SELECT/PREEMPT) →
-  route both brains through it, replacing the **interim direct-submit** to the shared L4. Then
-  **refactor #3** (kill-aplay preempt + interrupt-awareness + Delivery Completeness
-  re-delivery). Then bench-tune `MomentaryPolicy` numbers + measure Safety-family precision.
+- **In progress / next:** refactor #3 **DONE** (Arbiter wiring + kill-aplay + buzzer +
+  re-delivery). **Finish all-angle Pi test of re-delivery** (esp. belief 60→80 mid-safety →
+  must announce 80; safety-over-safety then re-deliver; no zombies) then **commit** the 8
+  re-delivery files + consider `git push` (drops old model/audio blobs from GitHub). Then
+  bench-tune `MomentaryPolicy`/cooldown numbers + measure Safety-family precision.
 - **Do NOT:** re-open `attention_rank`/threshold structure (only numbers tune); add an episode
   lifecycle to momentary; touch L1 re-arm for re-delivery (it's an L3-level re-announce); fix
   `MomentaryPolicy` numbers from assumption; wire `reset()` to presence loss; break the
