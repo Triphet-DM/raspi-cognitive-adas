@@ -89,7 +89,12 @@ void ShadowSpeedLimitPipeline::tick(bool presence,
             const auto ar = arb_->submit(speed_rank(action), file, now);
             arb_str = ar.decision == NotificationArbiter::Decision::Play    ? "PLAY"    :
                       ar.decision == NotificationArbiter::Decision::Preempt ? "PREEMPT" : "DROP";
-            if (NotificationArbiter::plays(ar.decision) && nm_) nm_->submit(ar.filename);
+            // Play = ต่อคิว, Preempt = ตัดคลิปเก่า. (speed rank < 20 → ปกติได้แค่ Play/Drop
+            //   แต่ route ตาม decision ไว้เพื่อความถูกต้องเชิงโครงสร้าง)
+            if (nm_) {
+                if      (ar.decision == NotificationArbiter::Decision::Play)    nm_->submit(ar.filename);
+                else if (ar.decision == NotificationArbiter::Decision::Preempt) nm_->preempt(ar.filename);
+            }
         } else if (nm_) {
             arb_str = "DIRECT";
             nm_->submit(file);   // ไม่มี arbiter wired → ส่งตรง (พฤติกรรมเดิม)

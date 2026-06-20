@@ -11,15 +11,20 @@
 // pattern = double-buffer เดียวกับ CameraThread / AsyncDetectionWorker
 //   (single producer + single consumer + 1 mutex + condvar + 1 pending slot)
 //
-// v1 ข้อจำกัดที่ตั้งใจ: single category, ไม่มี priority/queue, non-preemptive
-//   (aplay เล่นจนจบ); shutdown drain ≤ 1 คลิป (std::system block จน aplay จบ)
+// preempt(file): ตัด aplay ที่เล่นอยู่กลางคลิป (SIGTERM → 100ms → SIGKILL) แล้วเล่น file แทน —
+//   ใช้เมื่อ Arbiter ตัดสิน PREEMPT (safety แทรก). submit(file) = ต่อคิว latest-wins (ไม่ตัด)
+// process model: spawn aplay ด้วย posix_spawn (ถือ PID ไว้ → ฆ่าได้, ต่างจาก std::system) —
+//   producer = คนสั่ง kill; audio thread = เจ้าเดียวที่ waitpid (reap กัน zombie). ทุก access
+//   ของ child_pid_ อยู่ใต้ mutex_ → reap+clear atomic กับ kill (ปิดช่อง PID-reuse)
 //
 // enabled=false -> no-op ทั้งหมด ไม่ spawn thread (ใช้ตอนไม่เปิด --audio)
 // ============================================================
 
+#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <string>
+#include <sys/types.h>             // pid_t
 #include <thread>
 
 #include "audio/SpeedAudioMap.h"   // Action + filename()
@@ -42,12 +47,18 @@ public:
     //   เป็นทางเข้ากลางที่ทั้ง 2 สมองใช้ร่วม (speed ผ่าน notify() ด้านล่าง, momentary ส่งตรง)
     void submit(const std::string& filename);
 
+    // PREEMPT: ตัดคลิปที่กำลังเล่น (kill aplay) แล้วเล่น filename แทนทันที. "" -> no-op.
+    //   เรียกเมื่อ Arbiter ตัดสิน Preempt เท่านั้น (Play ปกติ -> submit)
+    void preempt(const std::string& filename);
+
     // speed convenience: (action,value) -> SpeedAudioMap -> submit(). SuppressX/ไม่รู้จัก -> เงียบ
     void notify(Action action, const std::string& value);
 
 private:
-    void run();                                    // audio thread loop (consumer)
-    void play_blocking(const std::string& path);   // aplay จนจบ (เรียกนอก lock)
+    using Clock = std::chrono::steady_clock;
+
+    void run();                              // audio thread loop (consumer)
+    void play_clip(const std::string& path); // spawn aplay + reap (เรียกนอก run()'s lock)
 
     const std::string audio_dir_;
     const std::string device_;
@@ -56,7 +67,12 @@ private:
     std::thread             thread_;
     std::mutex              mutex_;
     std::condition_variable cv_;
-    std::string             pending_;          // ชื่อไฟล์ถัดไป — single slot
+    std::string             pending_;          // ชื่อไฟล์ถัดไป — single slot (latest-wins)
     bool                    has_pending_ = false;
     bool                    stop_        = false;
+
+    // process ของ aplay ที่กำลังเล่น — ทุก access ใต้ mutex_
+    pid_t             child_pid_    = -1;      // -1 = ไม่มีคลิปเล่นอยู่ (idle)
+    bool              term_pending_ = false;   // ส่ง SIGTERM แล้ว รอ 100ms ค่อย SIGKILL
+    Clock::time_point term_deadline_{};        // เส้นตายก่อน escalate เป็น SIGKILL
 };

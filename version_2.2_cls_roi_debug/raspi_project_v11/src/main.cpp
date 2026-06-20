@@ -499,7 +499,9 @@ static DecisionResult run_decision(
                 std::cout << "[MOMENTARY] " << act << " " << m.cls
                           << " rank=" << m.attention_rank
                           << " F" << frame_index << "\n" << std::flush;
-                if (NotificationArbiter::plays(ar.decision)) notifier.submit(ar.filename);
+                // Play = ต่อคิว, Preempt (safety แทรก) = ตัดคลิป speed ที่เล่นอยู่กลางคัน
+                if      (ar.decision == NotificationArbiter::Decision::Play)    notifier.submit(ar.filename);
+                else if (ar.decision == NotificationArbiter::Decision::Preempt) notifier.preempt(ar.filename);
             }
             // SUPPRESS = เงียบ (ไม่ log กัน spam ตอนป้ายค้างในเฟรม)
         }
