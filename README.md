@@ -64,7 +64,7 @@ This repository is the **full engineering journey**, not just the final system. 
 Phase 1 took the system from a first ONNX detection pipeline to a stable, NCNN-optimized, temporally-voted detector on the Pi — including the backend migration (§9) and the RGB/BGR fix (§12).
 
 ### Phase 2 — Cognitive architecture redesign (v2.2, current)
-The latest chapter rebuilds the **decision layer** on top of the v1.7 detection base: belief-state speed tracking (L1–L4), a second "momentary" engine for the non-speed signs, and cognitive attention arbitration (§5–§6). The question shifted from *"detect more signs"* to *"which information deserves the driver's attention."* **Same system — re-architected.** (`version_2.2_cls_roi_debug/`)
+The latest chapter rebuilds the **decision layer** on top of the v1.7 detection base: belief-state speed tracking (L1–L4), a second "momentary" engine for the non-speed signs, and cognitive attention arbitration (§5–§6). The question shifted from *"detect more signs"* to *"which information deserves the driver's attention."* **Same system — re-architected.** ([`version_2.2_cognitive_architecture/`](version_2.2_cognitive_architecture))
 
 ---
 
@@ -294,7 +294,7 @@ Plus: embedded-Python (Picamera2) GIL management, NCNN thread benchmarking, and 
 
 ## 15. Build & Run
 
-> Code currently lives under `version_2.2_cls_roi_debug/raspi_project_v11/`. <!-- TODO: flatten before publishing (mind CMake paths). -->
+> The current (v2.2) code lives in [`version_2.2_cognitive_architecture/`](version_2.2_cognitive_architecture); earlier phases are preserved in the `version_1.x_*` folders (§2).
 
 **Prerequisites (Pi 5):** NCNN (so CMake finds `ncnnConfig.cmake`), OpenCV, Python3 dev (Picamera2), a C++17 toolchain.
 
@@ -306,7 +306,7 @@ yolo export model=best.pt format=ncnn imgsz=512 half=False dynamic=False
 
 **2. Build:**
 ```bash
-cd version_2.2_cls_roi_debug/raspi_project_v11
+cd version_2.2_cognitive_architecture
 mkdir -p build && cd build
 cmake ..            # or: cmake .. -Dncnn_DIR=/path/to/ncnn/lib/cmake/ncnn
 make -j4
