@@ -402,15 +402,18 @@ A4 housekeeping = delete orphaned `SpeedSignLifecycle`.)
    School Zone 0.972 @conf0.45 → suppression at one tier level). **Bench-tune** `MomentaryPolicy`
    numbers + reminder/suppression cooldowns (test placeholders Safety 5s/Warning 15s/Restriction
    30s → user sets production; provisional values OK now).
-4. **Presentation:** README **fully redesigned 06-25** as an **evolution story** (16 sections;
-   §2 Timeline = real **v1.1→v1.7** early phase + **v2.2** redesign, NOT a separate project).
-   `README_assets/` (7 imgs incl. real detection screenshots sign_90/school_zone/…) **imported from
-   `origin/main`**; docs/ new-era charts (architecture/class_dist/training_curves); dataset = 13,039.
-   **PUBLISH STRATEGY (decide):** new README lives on `fix-gil`; `origin/main` still has the OLD
-   README + version_1.1–1.7 folders. Must integrate so the new README + v2.2 land on `main` while
-   **keeping** v1.x folders + README_assets (do NOT overwrite history). Pending: author final read +
-   **commit**; **demo video WITH AUDIO** (upload `demo/Video.mp4` via GitHub web/Release — NOT a
-   gif); GitHub ops (rename → `raspi-cognitive-adas`, default `main`, Pages, folder-flatten).
+4. **Presentation: ✅ PUBLISHED to public `main` 2026-06-25** (commit `7026136`, fast-forward push).
+   Evolution-story README (16 sections; §2 Timeline real **v1.1→v1.7** + **v2.2**); v2.2 folder
+   flattened/renamed → `version_2.2_cognitive_architecture/`; docs/ charts + README_assets +
+   ARCHITECTURE_VIEWER + 3 benchmark docs (INT8_AB / FP32_ENVELOPE / ARCHITECTURE). **Method:**
+   selective bring-over (NOT merge — `fix-gil` & `main` are **unrelated histories**, merge-base empty).
+   **Internal kept OFF main** (live on `fix-gil` only): PROJECT_STATUS, session/EOD reports,
+   architecture_issues, claude_engineering_growth_skill. **Safety:** `backup-main-before-v2` pushed;
+   v1.1–1.7 history intact; merged `.gitignore` drops global `*.png/*.jpg` so presentation imgs track
+   (models/audio/demo stay local). **STILL PENDING:** verify GitHub render/images; **demo video WITH
+   AUDIO** (upload `demo/Video.mp4` via GitHub web/Release — NOT a gif); optional `evo_*` shots;
+   **rename repo → `raspi-cognitive-adas` DEFERRED** (deliberately not same day as publish); enable
+   Pages. *(`fix-gil` .gitignore still the older dev version — optional to sync to main's merged one.)*
 
 ---
 
