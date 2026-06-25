@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>raspi_project v11 — Architecture Board</title>
+<style>
+  :root{
+    --bg:#161618; --panel:#1f1f24; --panel2:#26262c; --line:#34343c;
+    --ink:#e9ecef; --ink2:#aab0b8; --accent:#9775fa;
+  }
+  html.light{
+    --bg:#ffffff; --panel:#ffffff; --panel2:#f1f3f5; --line:#dee2e6;
+    --ink:#1d1d20; --ink2:#5a5f66; --accent:#7048e8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:'Inter',system-ui,'Segoe UI',Roboto,sans-serif;overflow:hidden}
+  /* clean sans inside diagrams (standard, legible) */
+  .scene text{font-family:'Inter',system-ui,'Segoe UI',Roboto,Arial,sans-serif;}
+
+  #app{display:flex;height:100%}
+
+  /* ---------- Sidebar ---------- */
+  #sidebar{width:268px;flex:0 0 268px;background:var(--panel);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;transition:margin-left .2s ease}
+  #sidebar.collapsed{margin-left:-268px}
+  .brand{padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+  .brand h1{font-size:15px;margin:0 0 4px;letter-spacing:.2px}
+  .brand .meta{font-size:11px;color:var(--ink2);line-height:1.5}
+  .brand .tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;
+    background:#3a1c2b;color:#f783ac;border:1px solid #f783ac;margin-top:6px}
+  nav{overflow-y:auto;flex:1;padding:8px 8px 16px}
+  .group{margin-bottom:6px}
+  .group>.ghead{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+    padding:8px 10px;border-radius:8px;font-size:12px;font-weight:600;color:var(--ink2);
+    text-transform:uppercase;letter-spacing:.6px}
+  .group>.ghead:hover{background:var(--panel2)}
+  .group>.ghead .chev{transition:transform .15s ease;font-size:10px}
+  .group.closed .glist{display:none}
+  .group.closed .chev{transform:rotate(-90deg)}
+  .glist{margin:2px 0 8px}
+  .navitem{display:flex;align-items:center;gap:9px;padding:8px 10px 8px 14px;margin:2px 4px;
+    border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink);border:1px solid transparent}
+  .navitem:hover{background:var(--panel2)}
+  .navitem.active{background:var(--panel2);border-color:var(--accent)}
+  .navitem .dot{width:9px;height:9px;border-radius:3px;flex:0 0 9px}
+  .navitem .bn{font-size:10px;color:var(--ink2);margin-left:auto}
+  .legend{border-top:1px solid var(--line);padding:12px 14px;font-size:11px;color:var(--ink2)}
+  .legend h3{margin:0 0 8px;font-size:10px;letter-spacing:.6px;text-transform:uppercase}
+  .lrow{display:flex;align-items:center;gap:8px;margin:5px 0}
+  .lsw{width:14px;height:11px;border-radius:3px;border:1.5px solid}
+
+  /* ---------- Main ---------- */
+  #main{flex:1;display:flex;flex-direction:column;min-width:0}
+  #topbar{height:52px;flex:0 0 52px;display:flex;align-items:center;gap:10px;padding:0 14px;
+    background:var(--panel);border-bottom:1px solid var(--line)}
+  .iconbtn{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:16px;line-height:1;
+    display:flex;align-items:center;justify-content:center}
+  .iconbtn:hover{border-color:var(--accent)}
+  #boardTitle{font-size:14px;font-weight:600;margin-left:4px}
+  #boardSub{font-size:12px;color:var(--ink2);margin-left:8px}
+  .spacer{flex:1}
+  .zoomwrap{display:flex;align-items:center;gap:6px}
+  #zoomlbl{font-size:12px;color:var(--ink2);width:46px;text-align:center}
+
+  #stage{flex:1;position:relative;overflow:hidden;background:
+    radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 0) 0 0/26px 26px,
+    var(--bg)}
+  .board{position:absolute;inset:0;display:none}
+  .board.active{display:block}
+  .viewport{position:absolute;inset:0;overflow:hidden}
+  .scene{position:absolute;inset:0;width:100%;height:100%}
+  .hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);
+    background:var(--panel);border:1px solid var(--line);color:var(--ink2);
+    font-size:11px;padding:6px 12px;border-radius:20px;pointer-events:none;opacity:.9}
+
+  /* ---------- Layout-edit controls ---------- */
+  .txtbtn{background:var(--panel2);border:1px solid var(--line);color:var(--ink);height:34px;
+    padding:0 12px;border-radius:8px;cursor:pointer;font-size:12px}
+  .txtbtn:hover{border-color:var(--accent)}
+  .iconbtn.active,.txtbtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .vsep{width:1px;height:26px;background:var(--line);margin:0 4px}
+  #editBanner{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:5;
+    background:var(--accent);color:#fff;font-size:12px;font-weight:600;padding:7px 16px;
+    border-radius:20px;box-shadow:0 4px 14px rgba(0,0,0,.4);pointer-events:none}
+  /* interaction modes */
+  #stage.mode-pan .viewport{cursor:grab}
+  #stage.mode-pan .viewport.grabbing{cursor:grabbing}
+  #stage.mode-select .viewport{cursor:text}
+  #stage.mode-edit .viewport{cursor:move}
+  #stage.mode-edit .node{cursor:move}
+  #stage.mode-edit{outline:2px dashed var(--accent);outline-offset:-2px}
+  #stage.mode-pan .scene,#stage.mode-edit .scene{user-select:none;-webkit-user-select:none}
+  #stage.mode-select .scene{user-select:text;-webkit-user-select:text}
+  .node.dragging{opacity:.92}
+
+  /* ---------- Thai glossary panel ---------- */
+  #glossary{position:absolute;top:0;right:0;width:430px;max-width:92vw;height:100%;z-index:20;
+    background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;
+    transform:translateX(100%);transition:transform .22s ease;box-shadow:-8px 0 24px rgba(0,0,0,.35)}
+  #glossary.open{transform:translateX(0)}
+  #glossary .ghd{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  #glossary .ghd h2{font-size:15px;margin:0;flex:1}
+  #glossary .gsub{font-size:11px;color:var(--ink2);padding:0 16px;margin:8px 0 0}
+  .gclose{cursor:pointer;background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    border-radius:8px;width:32px;height:32px;font-size:14px}
+  .gclose:hover{border-color:var(--accent)}
+  #gsearch{margin:10px 16px;padding:9px 11px;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--ink);font-size:13px;font-family:inherit}
+  #glist{overflow-y:auto;flex:1;padding:2px 16px 26px}
+  .gitem{padding:11px 0;border-bottom:1px solid var(--line)}
+  .gitem .gt{font-size:13.5px;font-weight:600;color:var(--accent)}
+  .gitem .gcat{font-size:10px;color:var(--ink2);margin-left:7px;border:1px solid var(--line);
+    border-radius:10px;padding:1px 7px;white-space:nowrap}
+  .gitem .gd{font-size:13.5px;color:var(--ink);margin-top:4px;line-height:1.6}
+  .ghidden{display:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand">
+      <h1>raspi_project v11</h1>
+      <div class="meta">Traffic-Sign Speed-Limit Announcer · Pi 5 · C++17<br/>
+        HEAD <code>001ab58</code> · branch <code>fix-gil</code></div>
+      <span class="tag">SHADOW MODE · audio = shadow path</span>
+    </div>
+    <nav id="nav"></nav>
+    <div class="legend">
+      <h3>Color key</h3>
+      <div class="lrow"><span class="lsw" style="border-color:#4dabf7;background:#13263b"></span>Perception (Camera·YOLO·ROI·Voter·CLS)</div>
+      <div class="lrow"><span class="lsw" style="border-color:#b197fc;background:#221a3a"></span>Decision (L1·L2·L3)</div>
+      <div class="lrow"><span class="lsw" style="border-color:#69db7c;background:#0f2c1d"></span>Audio (L4·aplay·speaker)</div>
+      <div class="lrow"><span class="lsw" style="border-color:#ffc078;background:#3a2912"></span>Legacy authority</div>
+      <div class="lrow"><span class="lsw" style="border-color:#f783ac;background:#3a1c2b"></span>Shadow pipeline</div>
+      <div class="lrow"><span class="lsw" style="border-color:#ffe066;background:#332f12"></span>Data object</div>
+      <div class="lrow"><span class="lsw" style="border-color:#adb5bd;background:#26262b"></span>Infra / thread</div>
+    </div>
+  </aside>
+
+  <div id="main">
+    <div id="topbar">
+      <button class="iconbtn" id="toggleSidebar" title="Toggle sidebar">☰</button>
+      <span id="boardTitle"></span>
+      <span id="boardSub"></span>
+      <div class="spacer"></div>
+      <div class="zoomwrap">
+        <button class="iconbtn" id="zoomOut" title="Zoom out">−</button>
+        <span id="zoomlbl">100%</span>
+        <button class="iconbtn" id="zoomIn" title="Zoom in">+</button>
+        <button class="iconbtn" id="fit" title="Fit to screen">⤢</button>
+      </div>
+      <span class="vsep"></span>
+      <button class="txtbtn modebtn" id="panBtn" title="Pan mode — drag to move, wheel to zoom">✋ Pan</button>
+      <button class="txtbtn modebtn" id="selectBtn" title="Select mode — drag to select &amp; copy text">📝 Select</button>
+      <button class="txtbtn modebtn" id="editBtn" title="Edit mode — drag nodes to reposition">✏ Edit</button>
+      <button class="txtbtn" id="resetBtn" title="Reset this board's layout to default">Reset</button>
+      <button class="txtbtn" id="exportBtn" title="Export all layouts as JSON">Export</button>
+      <button class="txtbtn" id="importBtn" title="Import layouts from JSON">Import</button>
+      <input type="file" id="importInput" accept="application/json,.json" style="display:none" />
+      <button class="txtbtn" id="glossaryBtn" title="อภิธานศัพท์ภาษาไทย — Thai glossary">📖 ศัพท์</button>
+      <span class="vsep"></span>
+      <button class="iconbtn" id="theme" title="Toggle dark / light">◐</button>
+    </div>
+    <div id="stage"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   Excalidraw-style scene builder (SVG strings)
+   ============================================================ */
+const CAT = {
+  // saturated fill + strong stroke/title — vivid yet readable on white
+  perc:  {s:'#1565a8', f:'#cfe3f7'},   // perception — blue
+  data:  {s:'#9a6f00', f:'#fceeb0'},   // data — amber
+  dec:   {s:'#5b34c9', f:'#ddd2f7'},   // decision — purple
+  audio: {s:'#268a3a', f:'#cdebd6'},   // audio — green
+  legacy:{s:'#d24e08', f:'#fad8bf'},   // legacy — orange
+  shadow:{s:'#b01e51', f:'#facfe0'},   // Brain 2 / momentary — magenta
+  infra: {s:'#495057', f:'#dfe3e8'},   // infra — gray
+  note:  {s:'#727a82', f:'#eceff2'},   // note — muted
+  // live-sim state colors (Board 10): gray=idle yellow=processing green=ok red=rejected blue=waiting
+  s_idle:{s:'#566377', f:'#dde3ea'},
+  s_proc:{s:'#a06f04', f:'#fbeec0'},
+  s_ok:  {s:'#268a3a', f:'#cdebd6'},
+  s_rej: {s:'#c92a2a', f:'#fad2d2'},
+  s_wait:{s:'#1565a8', f:'#cfe3f7'},
+  active:{s:'#d97e00', f:'#ffe9c2'},
+};
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+// geometry scale — boxes & gaps grow while fonts stay fixed → more padding + spacing
+const S = 1.18;
+const sc = v => v*S;
+
+function sidePoint(n, side){                 // returns SCALED absolute anchor
+  const x=sc(n.x), y=sc(n.y), w=sc(n.w), h=sc(n.h);
+  const cx=x+w/2, cy=y+h/2;
+  switch(side){
+    case 'left':  return {x:x,   y:cy};
+    case 'right': return {x:x+w, y:cy};
+    case 'top':   return {x:cx,  y:y};
+    case 'bottom':return {x:cx,  y:y+h};
+    default:      return {x:cx,  y:cy};
+  }
+}
+function inferSides(a,b){
+  const acx=a.x+a.w/2, acy=a.y+a.h/2, bcx=b.x+b.w/2, bcy=b.y+b.h/2;
+  const dx=bcx-acx, dy=bcy-acy;
+  if(Math.abs(dx) >= Math.abs(dy))
+    return dx>=0 ? ['right','left'] : ['left','right'];
+  return dy>=0 ? ['bottom','top'] : ['top','bottom'];
+}
+function labelPill(x,y,text,color){
+  const w = text.length*6.8 + 16, h=21;
+  return `<g><rect x="${x-w/2}" y="${y-h/2}" width="${w}" height="${h}" rx="10"
+      style="fill:var(--panel)" stroke="${color}" stroke-width="1" opacity="0.97"/>
+      <text x="${x}" y="${y+4.5}" text-anchor="middle" font-size="12.5" fill="${color}"
+      style="font-family:Inter,sans-serif">${esc(text)}</text></g>`;
+}
+// draws node at LOCAL scaled coords (origin 0,0) — wrapped in a translated group
+function nodeInner(n,pfx){
+  const c = CAT[n.cls] || CAT.infra;
+  const w=sc(n.w), h=sc(n.h);
+  const lines = n.lines || [];
+  let s = '';
+  if(n.shape==='diamond'){
+    const pts=`${w/2},0 ${w},${h/2} ${w/2},${h} 0,${h/2}`;
+    s+=`<polygon points="${pts}" fill="${c.f}" stroke="${c.s}" stroke-width="2.5" filter="url(#rough_${pfx})"/>`;
+  } else if(n.shape==='ellipse'){
+    s+=`<ellipse cx="${w/2}" cy="${h/2}" rx="${w/2}" ry="${h/2}"
+        fill="${c.f}" stroke="${c.s}" stroke-width="2.5" filter="url(#rough_${pfx})"/>`;
+  } else if(n.shape==='life'){
+    s+=`<rect x="0" y="0" width="${w}" height="46" rx="9"
+        fill="${c.f}" stroke="${c.s}" stroke-width="2.5" filter="url(#rough_${pfx})"/>`;
+    s+=`<line x1="${w/2}" y1="46" x2="${w/2}" y2="${h}"
+        stroke="${c.s}" stroke-width="1.6" stroke-dasharray="3 6" opacity="0.7"/>`;
+    s+=`<text x="${w/2}" y="29" text-anchor="middle" font-size="15" font-weight="bold" fill="${c.s}">${esc(n.title)}</text>`;
+    return s;
+  } else {
+    s+=`<rect x="0" y="0" width="${w}" height="${h}" rx="13"
+        fill="${c.f}" stroke="${c.s}" stroke-width="2.5" filter="url(#rough_${pfx})"/>`;
+  }
+  const TS=15.5, BS=13.5, LH=19, GAP=10;
+  if(lines.length){
+    const blockH = TS + GAP + lines.length*LH;       // vertically centre the text block
+    const top = Math.max(8, (h - blockH)/2);
+    const ty  = top + TS;
+    s+=`<text x="${w/2}" y="${ty}" text-anchor="middle" font-size="${TS}" font-weight="bold" fill="${c.s}">${esc(n.title)}</text>`;
+    lines.forEach((ln,i)=>{
+      s+=`<text x="${w/2}" y="${ty + GAP + LH*(i+1) - 3}" text-anchor="middle" font-size="${BS}" fill="#343a40">${esc(ln)}</text>`;
+    });
+  } else {
+    s+=`<text x="${w/2}" y="${h/2 + TS/2 - 1}" text-anchor="middle" font-size="${TS}" font-weight="bold" fill="${c.s}">${esc(n.title)}</text>`;
+  }
+  if(n.active){ s+=`<rect x="-3" y="-3" width="${w+6}" height="${h+6}" rx="15" fill="none" stroke="#fde047" stroke-width="3"><animate attributeName="opacity" values="1;0.4;1" dur="1s" repeatCount="indefinite"/></rect>`; }
+  return s;
+}
+function nodeGroup(id,n,pfx){
+  return `<g class="node" data-id="${id}" transform="translate(${sc(n.x)},${sc(n.y)})">${nodeInner(n,pfx)}</g>`;
+}
+function edge(map, e, pfx){
+  // raw straight edge (sequence messages — Runtime board only) — coords are model space
+  if(e.raw){
+    const x1=sc(e.raw.x1), y1=sc(e.raw.y1), x2=sc(e.raw.x2), y2=sc(e.raw.y2);
+    const col = e.cls?CAT[e.cls].s:'#8b9097';
+    const dirx = x2>=x1?1:-1, ah=13;            // bold, colour-matched data-flow arrowhead
+    const head = `${x2},${y2} ${x2-dirx*ah},${y2-ah*0.62} ${x2-dirx*ah},${y2+ah*0.62}`;
+    let s=`<line x1="${x1}" y1="${y1}" x2="${x2-dirx*ah*0.7}" y2="${y2}" stroke="${col}" stroke-width="2.8"
+        ${e.dash?'stroke-dasharray="6 6"':''}/>`;
+    s+=`<polygon points="${head}" fill="${col}"/>`;
+    if(e.label) s+=labelPill((x1+x2)/2,(y1+y2)/2-15,e.label,col);
+    return s;
+  }
+  const a=map[e.from], b=map[e.to];
+  const col = e.cls?CAT[e.cls].s:'#8b9097';
+  // self loop (anchors already scaled)
+  if(e.from===e.to){
+    const A=sidePoint(a,'top'); const x=A.x, y=A.y;
+    const d=`M${x-26},${y} C ${x-86},${y-96} ${x+86},${y-96} ${x+26},${y}`;
+    let s=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2.4" marker-end="${markerId(col,pfx)}"/>`;
+    if(e.label) s+=labelPill(x,y-82,e.label,col);
+    return s;
+  }
+  let fs,ts;
+  if(e.fromSide&&e.toSide){fs=e.fromSide;ts=e.toSide;} else {[fs,ts]=inferSides(a,b);}
+  const p1=sidePoint(a,fs), p2=sidePoint(b,ts);
+  let d, lx, ly;
+  if(fs==='right'||fs==='left'){
+    const mx=(p1.x+p2.x)/2;
+    d=`M${p1.x},${p1.y} L${mx},${p1.y} L${mx},${p2.y} L${p2.x},${p2.y}`;
+    lx=mx; ly=p1.y-16;                       // lift label above the horizontal run
+  } else {
+    const my=(p1.y+p2.y)/2;
+    d=`M${p1.x},${p1.y} L${p1.x},${my} L${p2.x},${my} L${p2.x},${p2.y}`;
+    lx=p1.x+18; ly=my;                        // shift label beside the vertical run
+  }
+  let s=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2.4"
+      ${e.dash?'stroke-dasharray="7 6"':''} marker-end="${markerId(col,pfx)}" opacity="0.95"/>`;
+  if(e.label) s+=labelPill(lx,ly,e.label,col);
+  return s;
+}
+function region(r){
+  const c=CAT[r.cls]||CAT.infra;
+  const x=sc(r.x), y=sc(r.y), w=sc(r.w), h=sc(r.h);
+  return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="16"
+      fill="${c.s}" opacity="0.06"/>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="16"
+      fill="none" stroke="${c.s}" stroke-width="2" stroke-dasharray="9 7" opacity="0.65"/>
+    <text x="${x+18}" y="${y+28}" font-size="14.5" font-weight="bold" fill="${c.s}"
+      style="font-family:Inter,sans-serif">${esc(r.label)}</text></g>`;
+}
+function note(nt){
+  if(nt.divider){
+    const x=sc(nt.x), y=sc(nt.y), w=sc(nt.w);
+    return `<g><line x1="${x}" y1="${y}" x2="${x+w}" y2="${y}"
+        stroke="#6b7077" stroke-width="1.5" stroke-dasharray="4 7"/>
+      <rect x="${x+w/2-nt.label.length*3.8-12}" y="${y-12}" width="${nt.label.length*7.6+24}" height="24" rx="12"
+        style="fill:var(--panel)" stroke="#6b7077"/>
+      <text x="${x+w/2}" y="${y+5}" text-anchor="middle" font-size="12.5" fill="#5a6068"
+        style="font-family:Inter,sans-serif">${esc(nt.label)}</text></g>`;
+  }
+  const c=CAT[nt.cls||'note'];
+  const x=sc(nt.x), y=sc(nt.y), w=sc(nt.w);
+  const lines = nt.lines||[];
+  const h = (nt.h ? sc(nt.h) : (lines.length*19 + (nt.title?30:16)));
+  let s=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="11"
+      fill="${c.f}" stroke="${c.s}" stroke-width="1.6" opacity="0.97"/>`;
+  let yy=y+22;
+  if(nt.title){ s+=`<text x="${x+14}" y="${yy}" font-size="14" font-weight="bold" fill="${c.s}">${esc(nt.title)}</text>`; yy+=24; }
+  lines.forEach(ln=>{ s+=`<text x="${x+14}" y="${yy}" font-size="13" fill="#343a40">${esc(ln)}</text>`; yy+=19; });
+  return s+`</g>`;
+}
+// one arrowhead marker per edge colour, namespaced per board (ids must be unique across svgs)
+const markerId = (col,pfx) => 'url(#ar_'+pfx+'_'+col.replace('#','')+')';
+function defs(pfx){
+  const cols = ['#8b9097'].concat(Object.values(CAT).map(c=>c.s));
+  const markers = cols.map(col=>
+    `<marker id="ar_${pfx}_${col.replace('#','')}" viewBox="0 0 10 10" refX="8.4" refY="5" markerWidth="8.5" markerHeight="8.5" orient="auto">`+
+    `<path d="M0,0 L10,5 L0,10 z" fill="${col}"/></marker>`).join('');
+  return `<defs>
+    <filter id="rough_${pfx}" x="-12%" y="-12%" width="124%" height="124%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="11" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    ${markers}
+  </defs>`;
+}
+function renderEdges(b){ return (b.edges||[]).map(e=>edge(b.nodes||{},e,b.id)).join(''); }
+function renderNodes(b){ return Object.entries(b.nodes||{}).map(([id,n])=>nodeGroup(id,n,b.id)).join(''); }
+function buildSVG(b){
+  const W=sc(b.W), H=sc(b.H);
+  return `<svg class="scene" data-w="${W}" data-h="${H}" width="${W}" height="${H}"
+     viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    ${defs(b.id)}
+    <g class="g-regions">${(b.regions||[]).map(region).join('')}</g>
+    <g class="g-edges">${renderEdges(b)}</g>
+    <g class="g-nodes">${renderNodes(b)}</g>
+    <g class="g-notes">${(b.notes||[]).map(note).join('')}</g>
+  </svg>`;
+}
+
+/* ============================================================
+   BOARD DEFINITIONS
+   ============================================================ */
+const BOARDS = [];
+
+/* ---------- BOARD 0 — SUPER SYSTEM OVERVIEW (giant wall map) ---------- */
+BOARDS.push({
+  id:'b0', group:'Overview', name:'0 · Super System Overview', icon:'#ffd43b',
+  title:'Board 0 — Super System Overview', sub:'the whole system in one map · opens fit · zoom into any region',
+  fitDefault:true,
+  W:4320, H:2360,
+  regions:[
+    {x:40,y:160,w:4240,h:330,cls:'perc',  label:'CAMERA THREAD — only with --async-camera (ruled out; SYNC is default)'},
+    {x:40,y:500,w:4240,h:360,cls:'perc',  label:'DETECTION THREAD — only with --async-detect (ruled out; SYNC is default)'},
+    {x:40,y:870,w:4240,h:1060,cls:'dec',  label:'MAIN THREAD (always) — owns nearly everything · run_decision + render + L1–L4 producer'},
+    {x:40,y:1950,w:4240,h:330,cls:'audio',label:'AUDIO THREAD — only when --audio'},
+    {x:2270,y:1100,w:380,h:210,cls:'legacy',label:'LEGACY PATH — REMOVED at cutover 06-17'},
+    {x:2700,y:870,w:1430,h:440,cls:'shadow',label:'DECISION AUTHORITY (L1–L4) → SPEAKER'},
+  ],
+  nodes:{
+    camera:{x:120,y:230,w:300,h:130,cls:'perc',title:'Picamera2Camera',lines:['read(): embedded CPython','RGB888 → BGR (cvtColor)','GIL Ensure/Release']},
+    camthread:{x:470,y:230,w:300,h:130,cls:'infra',title:'CameraThread',lines:['double-buffer slots[2]','per-slot mutex + atomic idx','owned by main']},
+    camframe:{x:830,y:245,w:270,h:100,cls:'data',title:'CameraFrame',lines:['{frame, captured_at, seq}']},
+
+    worker:{x:470,y:560,w:330,h:140,cls:'infra',title:'AsyncDetectionWorker',lines:['pending_/result_ slots','1 shared mutex + condvar','latest-wins · dropped_frames']},
+    yolo:{x:880,y:560,w:330,h:140,cls:'perc',title:'YoloDetector + NcnnModel',lines:['letterbox → ncnn → NMS','detect(): YOLO only']},
+    detres:{x:1270,y:575,w:290,h:110,cls:'data',title:'DetectionResult',lines:['frame clone + Detection[]','+ StageTimes']},
+    detin:{x:1600,y:575,w:280,h:110,cls:'data',title:'Detection[]',lines:['{box, class, conf} ×N']},
+
+    mainloop:{x:120,y:900,w:320,h:130,cls:'infra',title:'main loop',lines:['capture → detect → decide','→ render → metrics']},
+    rundec:{x:120,y:1070,w:320,h:130,cls:'infra',title:'run_decision()',lines:['orchestrates decision','MAIN thread only']},
+    appconfig:{x:120,y:1250,w:320,h:120,cls:'infra',title:'AppConfig',lines:['runtime configuration']},
+    cliflags:{x:120,y:1400,w:320,h:170,cls:'note',title:'CLI flags',lines:['--shadow / --audio','--async-camera / --async-detect','--shadow-k / -rearm / -reminder','--cls-* · --save-roi-debug','--show-window / --no-draw']},
+
+    voter:{x:1560,y:880,w:300,h:130,cls:'perc',title:'TemporalVoter',lines:['deque(10) · confirm 4/10','suppressed → empty vote']},
+    cooldown:{x:1560,y:1050,w:300,h:130,cls:'legacy',title:'CooldownManager ❌ REMOVED',lines:['removed at cutover 06-17','anti-spam moved to L3']},
+    roi:{x:1920,y:880,w:300,h:130,cls:'perc',title:'ROI pipeline',lines:['roi_by_class · BestROI','best crop per class']},
+    classifier:{x:1920,y:1050,w:300,h:140,cls:'perc',title:'SpeedSignClassifier',lines:['Confirm-then-Classify','VALUE authority','owned by YoloDetector']},
+    confirmed:{x:2300,y:945,w:280,h:110,cls:'data',title:'confirmed_value',lines:['CLS-corrected class']},
+    legacy:{x:2300,y:1130,w:330,h:140,cls:'legacy',title:'LEGACY PATH ❌ REMOVED',lines:['removed at cutover 06-17','L1–L4 is now the authority','(was: console "[CONFIRMED]")']},
+
+    gate:{x:2740,y:900,w:270,h:80,cls:'shadow',title:'is_speed() gate'},
+    facade:{x:2740,y:1010,w:300,h:120,cls:'shadow',title:'ShadowSpeedLimitPipeline',lines:['facade · tick() each frame','no locks (main only)']},
+    l1:{x:3080,y:880,w:300,h:110,cls:'dec',title:'L1 SignEpisodeLifecycle',lines:['episode + fresh']},
+    l2:{x:3080,y:1010,w:320,h:110,cls:'dec',title:'L2 CurrentSpeedLimitManager',lines:['belief + K + no-forget']},
+    l3:{x:3080,y:1140,w:320,h:110,cls:'dec',title:'L3 AnnouncementPolicy',lines:['CHANGE / REMINDER / SUPPRESS']},
+    action:{x:3460,y:1145,w:250,h:100,cls:'data',title:'Action',lines:['CHANGE / REMINDER']},
+    l4:{x:3460,y:1010,w:300,h:110,cls:'audio',title:'L4 NotificationManager',lines:['SpeedAudioMap → wav','single-slot latest-wins']},
+    audiofile:{x:3820,y:1010,w:260,h:110,cls:'data',title:'Audio file',lines:['"change_50.wav"']},
+
+    metrics:{x:560,y:1480,w:330,h:140,cls:'infra',title:'Performance metrics',lines:['StageTimes · RollingAverage','TimingAverages · counters','print_performance']},
+    debug:{x:940,y:1480,w:330,h:140,cls:'infra',title:'Debugging subsystem',lines:['[DET] [CLS] [SHADOW][L3]','--save-roi-debug crops']},
+    framesave:{x:1320,y:1480,w:330,h:140,cls:'infra',title:'Frame saving',lines:['--save-frames','hit/miss buckets']},
+    render:{x:1700,y:1480,w:330,h:140,cls:'infra',title:'Rendering / UI',lines:['draw overlay · imshow','--show-window / --no-draw']},
+
+    out_console:{x:2300,y:1480,w:300,h:110,cls:'note',title:'OUTPUT — console',lines:['[SHADOW][L3] (authority)']},
+    out_window:{x:2300,y:1620,w:300,h:100,cls:'note',title:'OUTPUT — window',lines:['OpenCV imshow overlay']},
+    out_frames:{x:2300,y:1740,w:300,h:100,cls:'note',title:'OUTPUT — saved frames',lines:['pi_debug_frames/ · ROI crops']},
+
+    nm_cons:{x:3460,y:1980,w:340,h:150,cls:'audio',title:'NotificationManager.run()',lines:['consumer · play_blocking','aplay -q -D plughw:0,0','OUTSIDE the lock']},
+    speaker:{x:3860,y:1985,w:320,h:150,cls:'audio',title:'🔊 Speaker (MAX98357A)',lines:['I2S amp + 3W','spoken Thai voice']},
+  },
+  edges:[
+    {from:'camera',to:'camthread',label:'writes slot'},
+    {from:'camthread',to:'camframe'},
+    {from:'camframe',to:'worker',label:'CLONE → main',cls:'perc'},
+    {from:'worker',to:'yolo'},
+    {from:'yolo',to:'detres'},
+    {from:'detres',to:'detin',label:'try_take_result() 🔒',cls:'data'},
+    {from:'detin',to:'voter',label:'top_class',fromSide:'bottom',toSide:'top'},
+    {from:'detin',to:'roi',label:'box',fromSide:'bottom',toSide:'top'},
+    {from:'detin',to:'l1',label:'raw presence (bypasses gate)',dash:true,cls:'shadow',fromSide:'bottom',toSide:'top'},
+    {from:'mainloop',to:'rundec'},
+    {from:'appconfig',to:'mainloop',label:'configures'},
+    {from:'cliflags',to:'appconfig',label:'parsed',fromSide:'top',toSide:'bottom'},
+    {from:'rundec',to:'voter',label:'orchestrates',dash:true,fromSide:'right',toSide:'left'},
+    {from:'cooldown',to:'voter',label:'suppress → ""',dash:true,cls:'legacy',fromSide:'top',toSide:'bottom'},
+    {from:'roi',to:'classifier',label:'best crop',fromSide:'bottom',toSide:'top'},
+    {from:'voter',to:'confirmed',label:'winner'},
+    {from:'classifier',to:'confirmed',label:'CLS value'},
+    {from:'confirmed',to:'legacy',label:'authority',cls:'legacy',fromSide:'bottom',toSide:'top'},
+    {from:'confirmed',to:'gate',label:'confirmed_value',cls:'shadow'},
+    {from:'gate',to:'l1'},
+    {from:'facade',to:'l2',label:'owns L1–L4 + NM',dash:true,cls:'shadow',fromSide:'right',toSide:'left'},
+    {from:'l1',to:'l2'},{from:'l2',to:'l3'},
+    {from:'l3',to:'action',label:'Action',fromSide:'bottom',toSide:'left'},
+    {from:'action',to:'l4',fromSide:'top',toSide:'bottom'},
+    {from:'l4',to:'audiofile',label:'wav'},
+    {from:'audiofile',to:'nm_cons',label:'slot 🔒 latest-wins',cls:'audio',fromSide:'bottom',toSide:'top'},
+    {from:'nm_cons',to:'speaker'},
+    {from:'mainloop',to:'render',label:'render',dash:true,fromSide:'right',toSide:'top'},
+    {from:'rundec',to:'metrics',dash:true,fromSide:'right',toSide:'top'},
+    {from:'rundec',to:'debug',dash:true,fromSide:'right',toSide:'top'},
+    {from:'mainloop',to:'framesave',dash:true,fromSide:'right',toSide:'top'},
+    {from:'legacy',to:'out_console',label:'logs',cls:'legacy',fromSide:'bottom',toSide:'top'},
+    {from:'debug',to:'out_console'},
+    {from:'render',to:'out_window',fromSide:'right',toSide:'top'},
+    {from:'framesave',to:'out_frames',fromSide:'right',toSide:'left'},
+  ],
+  notes:[
+    {x:120,y:55,w:560,cls:'data',title:'① CAPTURE'},
+    {x:760,y:55,w:780,cls:'data',title:'② DETECT'},
+    {x:1560,y:55,w:1100,cls:'data',title:'③ CLASSIFY · VOTE · CONFIRM'},
+    {x:2740,y:55,w:1000,cls:'data',title:'④ BELIEF · ANNOUNCE'},
+    {x:3820,y:55,w:400,cls:'data',title:'⑤ PLAY'},
+    {x:2100,y:195,w:1000,cls:'note',title:'OWNERSHIP — created/owned by main()',lines:['CameraThread · AsyncDetectionWorker · YoloDetector','SpeedSignClassifier (held by YoloDetector)','TemporalVoter · roi_by_class  (CooldownManager removed)','ShadowSpeedLimitPipeline → L1·L2·L3·L4','MomentaryEngine · BehaviorPolicyRouter · NotificationArbiter','NotificationManager · AppConfig']},
+    {x:3180,y:195,w:1040,cls:'note',title:'SYNCHRONIZATION (1 producer → 1 consumer)',lines:['camera→main: frame CLONE (per-slot mutex + atomic idx)','main↔worker: pending/result buffer (1 mutex + 1 condvar)','main→audio: filename slot (mutex + condvar)','ALL latest-wins · L1–L4 lock-free (main only)']},
+    {x:1920,y:530,w:740,cls:'note',title:'LIFECYCLE (left → right)',lines:['capture → detect → classify → vote','→ confirm → belief → announce → play']},
+    {x:2760,y:530,w:1100,cls:'note',title:'AUTHORITY',lines:['L1–L4 is the speed AUTHORITY (cutover 06-17)','legacy voter+cooldown "[CONFIRMED]" path REMOVED','+ Brain 2 (momentary) + Notification Arbiter — see Board 1']},
+  ],
+});
+
+/* ---------- BOARD 1 — SYSTEM OVERVIEW ---------- */
+BOARDS.push({
+  id:'b1', group:'Overview', name:'1 · System Overview', icon:'#4dabf7',
+  title:'Board 1 — Cognitive Driver Assistance Architecture', sub:'two decision engines → BehaviorPolicyRouter → Notification Arbiter → shared L4 · sync main thread · read at 100%, pan left→right',
+  W:3260, H:930,
+  regions:[
+    {x:10,y:120,w:1530,h:340,label:'MAIN THREAD (sync) — perception · single decision thread · NO locks', cls:'infra'},
+    {x:1560,y:90,w:1120,h:260,label:'DECISION ENGINE A — Persistent-State (speed limit) · L1→L2→L3 → shared L4', cls:'dec'},
+    {x:1560,y:410,w:1120,h:270,label:'DECISION ENGINE B — Momentary events (10 non-speed signs) · per-class suppression', cls:'shadow'},
+    {x:2700,y:100,w:420,h:600,label:'ARBITER → shared L4 → AUDIO THREAD', cls:'audio'},
+  ],
+  nodes:{
+    io_in:{x:40,y:50,w:300,h:60,cls:'note',title:'INPUT — road scene'},
+    cam:{x:40,y:160,w:280,h:120,cls:'perc',title:'Camera (sync)',lines:['Picamera2.read() on main','RGB888 → BGR','no async (halves FPS)']},
+    yolo:{x:340,y:160,w:280,h:120,cls:'perc',title:'YOLO Detector · Stage 1',lines:['detects sign REGION only','presence + ROI box (NOT value)','letterbox→ncnn→NMS']},
+    det:{x:650,y:178,w:200,h:84,cls:'data',title:'Detection[]',lines:['{box,class,conf}']},
+    voter:{x:880,y:160,w:300,h:120,cls:'perc',title:'TemporalVoter',lines:['Detection Stability','= K/N FRAMES (count)','confirm → fire once']},
+    cls:{x:880,y:315,w:300,h:110,cls:'perc',title:'Speed Classifier · Stage 2',lines:['reads speed VALUE from ROI','confirm-then-classify (50/60/…)','feeds Engine A only']},
+    router:{x:1230,y:160,w:300,h:120,cls:'dec',title:'BehaviorPolicyRouter',lines:['after confirm','which behavioural policy?','→ which brain']},
+    l1:{x:1600,y:130,w:300,h:110,cls:'dec',title:'L1 SignEpisodeLifecycle',lines:['episode + fresh · re-arm']},
+    l2:{x:1920,y:130,w:300,h:110,cls:'dec',title:'L2 CurrentSpeedLimitManager',lines:['belief · K-hyst · no-forget']},
+    l3:{x:2240,y:130,w:300,h:110,cls:'dec',title:'L3 AnnouncementPolicy',lines:['CHANGE / REMINDER / SUPPRESS','Persistent Reminder = 180 s']},
+    mom:{x:1600,y:455,w:470,h:175,cls:'dec',title:'Momentary Engine',lines:['NO episode lifecycle','now − last_notified[class] ≥ window ?','  NO  → SUPPRESS (silent)','  YES → emit Action · stamp = now']},
+    mpol:{x:2110,y:455,w:430,h:175,cls:'shadow',title:'MomentaryPolicy (per class)',lines:['{ suppression_window (TIME),','  attention_rank }','class memory, not instance']},
+    arb:{x:2720,y:130,w:380,h:225,cls:'infra',title:'Notification Arbiter (stateful)',lines:['SELECT  : highest attention_rank','PREEMPT : rank>cur AND','          rank ≥ INTERRUPT_THRESHOLD','THRESHOLD = lowest safety rank','  (Ped Crossing) ⇒ re-derives Law 2','preempt = kill playing aplay']},
+    l4:{x:2720,y:390,w:380,h:120,cls:'audio',title:'shared L4 (single-slot)',lines:['latest-wins','value→wav  /  class→wav']},
+    spk:{x:2720,y:550,w:380,h:130,cls:'audio',title:'🔊 Speaker',lines:['aplay → MAX98357A','one voice at a time']},
+  },
+  edges:[
+    {from:'io_in',to:'cam'},
+    {from:'cam',to:'yolo'},{from:'yolo',to:'det'},
+    {from:'det',to:'voter',label:'top_class'},
+    {from:'voter',to:'cls',label:'on confirm',fromSide:'bottom',toSide:'top'},
+    {from:'voter',to:'router',label:'confirmed sign'},
+    {from:'cls',to:'router',label:'speed value',dash:true,fromSide:'right',toSide:'bottom'},
+    {from:'router',to:'l1',label:'speed family',fromSide:'right',toSide:'left',cls:'dec'},
+    {from:'router',to:'mom',label:'non-speed · 10 classes',fromSide:'bottom',toSide:'left',cls:'shadow'},
+    {from:'l1',to:'l2'},{from:'l2',to:'l3'},
+    {from:'mom',to:'mpol',label:'reads policy'},
+    {from:'l3',to:'arb',label:'Action{value, rank}',fromSide:'right',toSide:'left',cls:'dec'},
+    {from:'mom',to:'arb',label:'Action{class, rank}',fromSide:'right',toSide:'left',cls:'shadow'},
+    {from:'arb',to:'l4',label:'winner / preempt'},
+    {from:'l4',to:'spk'},
+    {from:'arb',to:'l3',label:'preempted clip → re-deliver (interrupt awareness)',dash:true,fromSide:'bottom',toSide:'right',cls:'note'},
+  ],
+  notes:[
+    {x:30,y:495,w:360,cls:'note',title:'Two-Brain asymmetry (LOCKED 06-15)',lines:['Momentary = no 2nd chance → MAY INTERRUPT.','Persistent = re-derivable → waits for the mouth.','Both feed ONE channel: the driver\'s ear.']},
+    {x:410,y:495,w:380,cls:'note',title:'Three temporal mechanisms (distinct!)',lines:['Detection Stability = K/N FRAMES (count)','Persistent Reminder = 180 s (speed only)','Notification Suppression = per-class seconds']},
+    {x:810,y:495,w:370,cls:'note',title:'Attention ranking (provisional #s · re-ranked 06-17)',lines:['School Zone 30 · Ped-Warning 25','Ped-Crossing 20 = THRESHOLD','Speed CHANGE 12 · Curve 10 · Crossroad 8','Restrictions 4 · Speed REMINDER 2']},
+    {x:1200,y:495,w:330,cls:'note',title:'3 integration refactors · DONE',lines:['1 · extract shared L4 from facade','2 · two wav maps (value→ / class→)','3 · kill-aplay preempt + re-delivery']},
+    {x:30,y:715,w:540,cls:'infra',title:'Engineering Challenges Solved',lines:['Embedded Python (Picamera2) + GIL management','NCNN thread benchmarking — threads=2 optimal','Async halved throughput → sync pipeline chosen','CPU-contention analysis · dropped-frame handling']},
+    {x:600,y:715,w:480,cls:'audio',title:'Performance Snapshot — Raspberry Pi 5 (8GB)',lines:['~18 FPS sustained · infer ~48 ms/frame','CPU ~50–60% · imgsz 512 · NCNN fp32','threads=2 · sync pipeline · packing on']},
+    {x:1110,y:715,w:420,cls:'perc',title:'Deployment — Fully On-Device',lines:['Raspberry Pi 5 · offline inference','NO cloud / NO network dependency','real-time execution at the edge']},
+  ],
+});
+
+/* ---------- BOARD 2 — THREAD ARCHITECTURE ---------- */
+BOARDS.push({
+  id:'b2', group:'Threads & Data', name:'2 · Thread Architecture', icon:'#adb5bd',
+  title:'Board 2 — Thread Architecture', sub:'main owns all decisions · async camera/detect optional (SYNC is default) · latest-wins hand-off',
+  W:1580, H:840,
+  regions:[
+    {x:20,y:70,w:340,h:740,label:'CAMERA THREAD (--async-camera · optional)', cls:'perc'},
+    {x:380,y:70,w:340,h:740,label:'DETECTION THREAD (--async-detect · optional)', cls:'perc'},
+    {x:740,y:70,w:430,h:740,label:'MAIN THREAD (always)', cls:'dec'},
+    {x:1190,y:70,w:370,h:740,label:'AUDIO THREAD (--audio)', cls:'audio'},
+  ],
+  nodes:{
+    c_cam:{x:60,y:110,w:260,h:70,cls:'perc',title:'Picamera2Camera',lines:['read(): GIL Ensure/Release','RGB888 → BGR']},
+    c_slots:{x:60,y:210,w:260,h:78,cls:'infra',title:'slots_[2] double buffer',lines:['writes 1-ready_index_','per-slot mutex · atomic idx']},
+    c_prod:{x:60,y:318,w:260,h:56,cls:'data',title:'produces: CameraFrame',lines:['{frame, captured_at, seq}']},
+
+    d_yolo:{x:410,y:110,w:280,h:70,cls:'perc',title:'YoloDetector / NcnnModel',lines:['detect(): YOLO ONLY','no voter / CLS / L1–L4']},
+    d_buf:{x:410,y:210,w:280,h:86,cls:'infra',title:'pending_ / result_ slots',lines:['1 SHARED mutex + 1 condvar','latest-wins (drops stale)','dropped_frames counter']},
+    d_cons:{x:410,y:326,w:280,h:52,cls:'data',title:'consumes: frame clone'},
+    d_prod:{x:410,y:408,w:280,h:52,cls:'data',title:'produces: Detection[]'},
+
+    m_loop:{x:770,y:110,w:370,h:56,cls:'infra',title:'main loop + run_decision()'},
+    m_voter:{x:770,y:188,w:175,h:54,cls:'perc',title:'TemporalVoter'},
+    m_cool:{x:965,y:188,w:175,h:54,cls:'legacy',title:'CooldownManager ❌ removed'},
+    m_roi:{x:770,y:262,w:175,h:54,cls:'perc',title:'roi_by_class'},
+    m_cls:{x:965,y:262,w:175,h:54,cls:'perc',title:'classifier (call)'},
+    m_lc:{x:770,y:336,w:370,h:46,cls:'legacy',title:'[LC-SHADOW] old lifecycle — removed'},
+    m_pipe:{x:770,y:400,w:370,h:120,cls:'shadow',title:'ShadowSpeedLimitPipeline (facade)',lines:['owns L1·L2·L3·L4','NO LOCKS — main thread only','tick() each frame']},
+    m_cons:{x:770,y:548,w:175,h:52,cls:'data',title:'consumes: Detection[]'},
+    m_prod:{x:965,y:548,w:175,h:52,cls:'data',title:'produces: notify()'},
+
+    a_slot:{x:1230,y:110,w:290,h:74,cls:'infra',title:'pending_ filename slot',lines:['1 mutex + 1 condvar','latest-wins']},
+    a_run:{x:1230,y:220,w:290,h:70,cls:'audio',title:'run() consumer loop',lines:['take latest → play','OUTSIDE the lock']},
+    a_play:{x:1230,y:326,w:290,h:74,cls:'audio',title:'aplay via posix_spawn',lines:['aplay -q -D plughw:0,0','preemptible (kill-aplay)']},
+  },
+  edges:[
+    {from:'c_cam',to:'c_slots'},{from:'c_slots',to:'c_prod'},
+    {from:'d_yolo',to:'d_buf'},{from:'d_buf',to:'d_cons'},{from:'d_cons',to:'d_prod'},
+    {from:'m_loop',to:'m_pipe',label:'orchestrates',fromSide:'bottom',toSide:'top'},
+    {from:'a_slot',to:'a_run'},{from:'a_run',to:'a_play'},
+    // cross-thread (bold)
+    {from:'c_prod',to:'m_loop',label:'get_latest_frame() → CLONE  🔒',cls:'perc',fromSide:'right',toSide:'left'},
+    {from:'m_loop',to:'d_buf',label:'submit_latest() 🔒mutex+cv',cls:'infra',fromSide:'left',toSide:'right'},
+    {from:'d_prod',to:'m_cons',label:'try_take_result()  (result buffer)',cls:'data',fromSide:'right',toSide:'left'},
+    {from:'m_prod',to:'a_slot',label:'notify() 🔒 latest-wins',cls:'audio',fromSide:'right',toSide:'left'},
+  ],
+  notes:[
+    {x:740,y:632,w:430,cls:'note',title:'Why this is safe',lines:['All decision state lives on MAIN ⇒ L1–L4 need NO locks.','Cross-thread pattern (×3): 1 producer · 1 consumer ·','1 mutex · 1 condvar · 1 slot · latest-wins.']},
+    {x:20,y:632,w:340,cls:'note',title:'Why frame CLONE',lines:['Main owns its own cv::Mat so the','camera thread can swap slots freely.','No torn frames; ~0.1ms copy.']},
+    {x:380,y:632,w:340,cls:'note',title:'Why result BUFFER',lines:['Main polls finished YOLO without','blocking; single slot (not queue)','avoids stale-frame latency.']},
+    {x:1190,y:632,w:370,cls:'note',title:'Lanes = execution, NOT ownership',lines:['YoloDetector & SpeedSignClassifier are','OWNED by main — they just RUN on the','worker thread shown in this lane.']},
+  ],
+});
+
+/* ---------- BOARD 3 — DATA FLOW & OWNERSHIP ---------- */
+(function(){
+  const objs=[
+    {o:'cv::Mat frame', oc:'data', creator:'Picamera2Camera.read()', owner:'main / CameraThread slot', consumer:'YOLO · ROI · CLS · render', death:'end iter / slot overwrite', life:'per frame (+clone in BestROI until confirm)'},
+    {o:'Detection[]', oc:'data', creator:'YOLO postprocess + NMS', owner:'main (moved from worker)', consumer:'run_decision', death:'end run_decision', life:'per frame'},
+    {o:'ROI (BestROI)', oc:'perc', creator:'BestROI.update()', owner:'main · roi_by_class', consumer:'CLS at confirm', death:'roi_by_class.clear() on confirm', life:'one voting window'},
+    {o:'VoteResult', oc:'data', creator:'TemporalVoter.evaluate()', owner:'run_decision local', consumer:'confirm branch + tick()', death:'end run_decision', life:'per frame (history persists in voter)'},
+    {o:'CLS result / confirmed_value', oc:'data', creator:'SpeedSignClassifier.classify()', owner:'run_decision local', consumer:'pipeline tick() → L1 + momentary', death:'end run_decision', life:'one confirm'},
+    {o:'EpisodeConfirmed', oc:'dec', creator:'L1 update()', owner:'tick() local', consumer:'L2.onValue / L3.decide', death:'end tick()', life:'one fire'},
+    {o:'L2 State (belief)', oc:'dec', creator:'L2 Acquire', owner:'CurrentSpeedLimitManager (facade)', consumer:'L3 · L4 value · log', death:'never (no-forget) / reset()', life:'persists across frames'},
+    {o:'AnnouncementAction', oc:'dec', creator:'L3 decide()', owner:'tick() local', consumer:'is_announce → log + L4', death:'end tick()', life:'one fire'},
+    {o:'Audio Clip', oc:'audio', creator:'SpeedAudioMap.filename()', owner:'NotificationManager pending_', consumer:'audio thread → aplay', death:'after playback / overwritten / shutdown', life:'until played or replaced'},
+  ];
+  const nodes={}, edges=[], notes=[];
+  const colX={creator:40, obj:380, owner:740, consumer:1110, death:1470};
+  const rowH=152, top=78, bw=290, bh=86;
+  objs.forEach((r,i)=>{
+    const y=top+i*rowH;
+    const idc='c'+i, ido='o'+i, idw='w'+i, idu='u'+i, idd='d'+i;
+    nodes[idc]={x:colX.creator,y,w:bw,h:bh,cls:'infra',title:'Creator',lines:[r.creator]};
+    nodes[ido]={x:colX.obj,y,w:bw,h:bh,cls:r.oc,title:r.o};
+    nodes[idw]={x:colX.owner,y,w:bw,h:bh,cls:'infra',title:'Owner',lines:[r.owner]};
+    nodes[idu]={x:colX.consumer,y,w:bw,h:bh,cls:'infra',title:'Consumer',lines:[r.consumer]};
+    nodes[idd]={x:colX.death,y,w:bw,h:bh,cls:'legacy',title:'Dies',lines:[r.death]};
+    edges.push({from:idc,to:ido,label:'creates'});
+    edges.push({from:ido,to:idw,label:'owned by'});
+    edges.push({from:idw,to:idu,label:'consumed by'});
+    edges.push({from:idu,to:idd,label:'dies'});
+    notes.push({x:colX.obj,y:y+bh+4,w:bw,cls:'note',lines:['lifetime: '+r.life]});
+  });
+  BOARDS.push({
+    id:'b3', group:'Threads & Data', name:'3 · Data Flow & Ownership', icon:'#ffe066',
+    title:'Board 3 — Data Flow & Ownership', sub:'creator → owner → consumer → death, per object',
+    W:1800, H:top+objs.length*rowH+20, regions:[], nodes, edges, notes
+  });
+})();
+
+/* ---------- BOARD 4 — RUNTIME SEQUENCE ---------- */
+(function(){
+  const LL={Camera:120, YOLO:300, Voter:480, CLS:660, L1:860, L2:1050, L3:1240, L4:1430, Speaker:1620};
+  const colOf={Camera:'perc',YOLO:'perc',Voter:'perc',CLS:'perc',L1:'dec',L2:'dec',L3:'dec',L4:'audio',Speaker:'audio'};
+  const H=1640;
+  const nodes={};
+  Object.keys(LL).forEach(k=>{ nodes['ll_'+k]={x:LL[k]-72,y:30,w:144,h:H-70,cls:colOf[k],shape:'life',title:k}; });
+  const msgs=[
+    {f:'Camera',t:'YOLO',l:'frame stream'},
+    {f:'YOLO',t:'Voter',l:'top_class = sign_50 (accumulate)'},
+    {f:'Voter',t:'CLS',l:'confirm → classify(best ROI)'},
+    {f:'CLS',t:'L1',l:'confirmed_value = sign_50'},
+    {f:'L1',t:'L2',l:'fired · fresh=TRUE', b:'UNKNOWN → ACTIVE(50)  [Acquire]'},
+    {f:'L2',t:'L3',l:'changed=TRUE'},
+    {f:'L3',t:'L4',l:'CHANGE'},
+    {f:'L4',t:'Speaker',l:'🔊 "change_50"'},
+    {div:'repeat observations — sign_50 still visible'},
+    {f:'Voter',t:'CLS',l:'confirm sign_50'},
+    {f:'CLS',t:'L1',l:'sign_50'},
+    {f:'L1',t:'L2',l:'fired · fresh=FALSE', b:'ACTIVE(50)  [Reconfirm]'},
+    {f:'L2',t:'L3',l:'changed=FALSE'},
+    {f:'L3',t:'Speaker',l:'SUPPRESS-CONT → ✗ silent', dash:true},
+    {div:'sign_60 appears — presence continuous'},
+    {f:'Voter',t:'CLS',l:'confirm sign_60'},
+    {f:'CLS',t:'L1',l:'sign_60 (fresh=FALSE)'},
+    {f:'L1',t:'L2',l:'fired', b:'ACTIVE(50) → ACTIVE(60)  [Change → commit]'},
+    {f:'L2',t:'L3',l:'changed=TRUE'},
+    {f:'L3',t:'L4',l:'CHANGE'},
+    {f:'L4',t:'Speaker',l:'🔊 "change_60"'},
+    {div:'later — occlusion >600ms, then re-see 60'},
+    {f:'L1',t:'L2',l:'re-arm→fire · fresh=TRUE', b:'ACTIVE(60)  [Reconfirm]'},
+    {f:'L2',t:'L3',l:'changed=FALSE · cooldown elapsed'},
+    {f:'L3',t:'L4',l:'REMINDER'},
+    {f:'L4',t:'Speaker',l:'🔊 "reminder_60"'},
+  ];
+  const edges=[], notes=[];
+  let y=110; const dy=58;
+  msgs.forEach((m,i)=>{
+    if(m.div){ notes.push({divider:true,x:40,y:y+6,w:1680,label:m.div}); y+=dy; return; }
+    const x1=LL[m.f], x2=LL[m.t];
+    const dir = x2>=x1?1:-1;
+    edges.push({raw:{x1:x1+12*dir, y1:y, x2:x2-12*dir, y2:y}, label:m.l, dash:m.dash, cls: m.dash?undefined:colOf[m.t]});
+    notes.push({x:50,y:y-9,w:42,cls:'note',lines:[String(i+1)]});
+    if(m.b) notes.push({x:LL.L2+86,y:y-12,w:300,cls:'data',lines:[m.b]});
+    y+=dy;
+  });
+  BOARDS.push({
+    id:'b4', group:'Runtime', name:'4 · Runtime Sequence', icon:'#b197fc',
+    title:'Board 4 — Runtime Sequence', sub:'Unknown → 50 acquired → repeats → 60 change → reminder',
+    W:1760, H:y+40, regions:[], nodes, edges, notes
+  });
+})();
+
+/* ---------- BOARD 5 — L1 STATE MACHINE ---------- */
+BOARDS.push({
+  id:'b5', group:'Decision Layers', name:'5 · L1 State Machine', icon:'#b197fc',
+  title:'Board 5 — L1 SignEpisodeLifecycle', sub:'Armed / Confirmed / Releasing · fresh logic',
+  W:1240, H:880,
+  nodes:{
+    start:{x:120,y:220,w:90,h:50,cls:'note',title:'start'},
+    armed:{x:140,y:360,w:210,h:96,cls:'dec',shape:'ellipse',title:'ARMED',lines:['waiting for confirm']},
+    conf:{x:540,y:360,w:220,h:96,cls:'dec',shape:'ellipse',title:'CONFIRMED',lines:['episode active']},
+    rel:{x:880,y:540,w:220,h:96,cls:'dec',shape:'ellipse',title:'RELEASING',lines:['sign fading out']},
+  },
+  edges:[
+    {from:'start',to:'armed'},
+    {from:'armed',to:'conf',label:'confirm → FIRE · fresh=TRUE'},
+    {from:'conf',to:'conf',label:'confirm → FIRE · fresh=FALSE'},
+    {from:'conf',to:'rel',label:'absence (no confirm)',fromSide:'right',toSide:'top'},
+    {from:'rel',to:'conf',label:'presence (re-seen)',fromSide:'left',toSide:'bottom'},
+    {from:'rel',to:'armed',label:'now − last_seen ≥ rearm_after → RE-ARM',fromSide:'bottom',toSide:'bottom'},
+  ],
+  notes:[
+    {x:120,y:110,w:520,cls:'note',title:'Invariant',lines:['presence (any frame) → last_seen = now   [in ALL states]','fresh = TRUE only on Armed → Confirmed (new sighting after gap)']},
+    {x:760,y:120,w:380,cls:'note',title:'Output',lines:['EpisodeConfirmed { fired, value, fresh }','value = pass-through (L1 is VALUE-BLIND;','it never decides the number — that is L2/CLS)']},
+    {x:120,y:720,w:520,cls:'note',title:'Cutover rule R3',lines:['reset() must NEVER be wired to presence loss','(would break L2 no-forget). rearm_after default 600ms.']},
+  ],
+});
+
+/* ---------- BOARD 6 — L2 STATE MACHINE ---------- */
+BOARDS.push({
+  id:'b6', group:'Decision Layers', name:'6 · L2 State Machine', icon:'#b197fc',
+  title:'Board 6 — L2 CurrentSpeedLimitManager', sub:'UNKNOWN / ACTIVE · K-hysteresis · no-forget',
+  W:1360, H:900,
+  nodes:{
+    start:{x:120,y:250,w:90,h:48,cls:'note',title:'start'},
+    unknown:{x:120,y:380,w:220,h:96,cls:'dec',shape:'ellipse',title:'UNKNOWN',lines:['current_ = nullopt']},
+    active:{x:560,y:380,w:240,h:100,cls:'dec',shape:'ellipse',title:'ACTIVE(V)',lines:['current_ = V']},
+    challenge:{x:540,y:640,w:280,h:96,cls:'shadow',title:'challenge (pending W≠V)',lines:['pending_value_ = W','pending_count_ ++']},
+    activeW:{x:1020,y:380,w:220,h:96,cls:'dec',shape:'ellipse',title:'ACTIVE(W)',lines:['committed new belief']},
+  },
+  edges:[
+    {from:'start',to:'unknown'},
+    {from:'unknown',to:'active',label:'onValue(V): Acquire  (NO K)'},
+    {from:'active',to:'active',label:'onValue(V same): Reconfirm · refresh · clear pending'},
+    {from:'active',to:'challenge',label:'onValue(W≠V)',fromSide:'bottom',toSide:'top'},
+    {from:'challenge',to:'challenge',label:'same W · count<K : Pending'},
+    {from:'challenge',to:'activeW',label:'count ≥ K : Change → commit',fromSide:'right',toSide:'bottom'},
+  ],
+  notes:[
+    {x:900,y:560,w:420,cls:'note',title:'NO arrow back to UNKNOWN',lines:['no-forget: presence loss never changes value.','Camera-only cannot know "no limit here".','Wrong-after-turn risk surfaced via age() telemetry.']},
+    {x:120,y:120,w:560,cls:'note',title:'K-hysteresis',lines:['A DIFFERENT value needs K consecutive confirms to commit.','The SAME value clears any pending challenge.','Default K=2 ⇒ a different value needs 2 consecutive confirms.']},
+    {x:120,y:770,w:560,cls:'data',title:'Internal state',lines:['current_ · pending_value_ · pending_count_ · last_confirmed_at_','age(now) = now − last_confirmed_at_  (telemetry only)']},
+  ],
+});
+
+/* ---------- BOARD 7 — L3 DECISION TREE ---------- */
+(function(){
+  const tableRows=[
+    ['changed','fresh','cooldown','Action','speak'],
+    ['true','—','—','CHANGE','yes · reset'],
+    ['false','true','elapsed','REMINDER','yes · reset'],
+    ['false','true','not yet','SUPPRESS-CD','no'],
+    ['false','false','—','SUPPRESS-CONT','no'],
+  ];
+  const notes=[];
+  // table
+  const tx=120, ty=470, cw=200, rh=42;
+  let tnote='';
+  tableRows.forEach((row,r)=>{
+    row.forEach((cell,c)=>{
+      notes.push({x:tx+c*cw, y:ty+r*rh, w:cw-6, h:rh-6, cls: r===0?'data':'note', lines:[cell]});
+    });
+  });
+  notes.push({x:120,y:430,w:400,cls:'note',lines:['Decision table']});
+  notes.push({x:tx,y:ty+tableRows.length*rh+14,w:cw*5-6,cls:'note',title:'Examples',lines:[
+    'acquire 50  → CHANGE 🔊',
+    'see 50 again (continuous) → SUPPRESS-CONT (silent)',
+    're-see 50 after gap, cooldown done → REMINDER 🔊',
+    're-see 50 after gap, cooldown active → SUPPRESS-CD (silent)']});
+  notes.push({x:760,y:120,w:460,cls:'note',title:'Cooldown logic',lines:[
+    'reminder cooldown = global single timestamp.',
+    'CHANGE bypasses it but DOES reset it.',
+    'REMINDER also resets it. Default 180s',
+    '(lower with --shadow-reminder-sec for bench).']});
+  BOARDS.push({
+    id:'b7', group:'Decision Layers', name:'7 · L3 Decision Tree', icon:'#b197fc',
+    title:'Board 7 — L3 AnnouncementPolicy', sub:'CHANGE / REMINDER / SUPPRESS · cooldown logic',
+    W:1320, H:840,
+    nodes:{
+      d_changed:{x:120,y:120,w:200,h:120,cls:'dec',shape:'diamond',title:'changed?'},
+      out_change:{x:120,y:300,w:200,h:96,cls:'audio',title:'CHANGE 🔊',lines:['announce','bypass + reset timer']},
+      d_fresh:{x:470,y:120,w:200,h:120,cls:'dec',shape:'diamond',title:'fresh?'},
+      out_cont:{x:470,y:300,w:200,h:80,cls:'note',title:'SUPPRESS-CONT',lines:['silent · timer untouched']},
+      d_cd:{x:820,y:120,w:220,h:120,cls:'dec',shape:'diamond',title:'cooldown elapsed?'},
+      out_rem:{x:760,y:300,w:200,h:96,cls:'audio',title:'REMINDER 🔊',lines:['announce','reset timer']},
+      out_cdsup:{x:1000,y:300,w:200,h:80,cls:'note',title:'SUPPRESS-CD',lines:['silent']},
+    },
+    edges:[
+      {from:'d_changed',to:'out_change',label:'yes'},
+      {from:'d_changed',to:'d_fresh',label:'no'},
+      {from:'d_fresh',to:'out_cont',label:'no'},
+      {from:'d_fresh',to:'d_cd',label:'yes'},
+      {from:'d_cd',to:'out_rem',label:'yes',fromSide:'bottom',toSide:'top'},
+      {from:'d_cd',to:'out_cdsup',label:'no',fromSide:'bottom',toSide:'top'},
+    ],
+    notes
+  });
+})();
+
+/* ---------- BOARD 8 — L4 AUDIO ARCHITECTURE ---------- */
+BOARDS.push({
+  id:'b8', group:'Audio', name:'8 · L4 Audio Architecture', icon:'#69db7c',
+  title:'Board 8 — L4 Audio (NotificationManager)', sub:'single-slot latest-wins · why FIFO rejected',
+  W:1520, H:820,
+  nodes:{
+    l3out:{x:40,y:120,w:190,h:80,cls:'dec',title:'L3 Action',lines:['CHANGE / REMINDER']},
+    notify:{x:280,y:120,w:210,h:84,cls:'audio',title:'notify(action,value)',lines:['MAIN thread','non-blocking producer']},
+    map:{x:540,y:120,w:220,h:84,cls:'audio',title:'SpeedAudioMap.filename',lines:['pure · → "change_50.wav"','"" ⇒ skip']},
+    slot:{x:810,y:120,w:250,h:96,cls:'infra',title:'pending_ (single slot)',lines:['latest-wins','overwrite drops stale','🔒 mutex + condvar']},
+    athread:{x:1120,y:120,w:280,h:96,cls:'audio',title:'Audio Thread · run()',lines:['take latest filename','play OUTSIDE the lock']},
+    play:{x:1120,y:280,w:280,h:80,cls:'audio',title:'aplay via posix_spawn',lines:['aplay -q -D plughw:0,0','preemptible (kill-aplay)']},
+    amp:{x:1120,y:410,w:280,h:66,cls:'audio',title:'MAX98357A I2S amp'},
+    spk:{x:1120,y:530,w:280,h:80,cls:'audio',title:'🔊 Speaker (3W)'},
+  },
+  edges:[
+    {from:'l3out',to:'notify'},{from:'notify',to:'map'},{from:'map',to:'slot'},{from:'slot',to:'athread'},
+    {from:'athread',to:'play'},{from:'play',to:'amp'},{from:'amp',to:'spk'},
+  ],
+  notes:[
+    {x:40,y:300,w:480,cls:'legacy',title:'❌ FIFO queue — REJECTED',lines:[
+      'backlog plays STALE state',
+      'unbounded latency builds up',
+      'speaker lies about the current limit']},
+    {x:40,y:430,w:480,cls:'audio',title:'✓ single-slot latest-wins — CHOSEN',lines:[
+      'always the freshest decision',
+      'never blocks perception (play outside lock)',
+      'burst collapses to first + last']},
+    {x:40,y:560,w:480,cls:'note',title:'Also rejected',lines:[
+      'synchronous audio — blocks perception 1–2s per clip']},
+    {x:560,y:430,w:500,cls:'data',title:'Burst example  50 → 60 → 80 → 100',lines:[
+      'slot keeps only the latest while aplay is busy',
+      'HEARD:  "50"  …  then  "100"',
+      '(60 and 80 dropped as stale — verified on Pi)']},
+  ],
+});
+
+/* ---------- BOARD 9 — DEBUGGING MAP ---------- */
+(function(){
+  const cards=[
+    {t:'No detection', c:'perc', lines:[
+      'Inspect: Camera → YOLO',
+      'Logs: NCNN banner · [DET F..] · perf "det/conf"',
+      'Owner: YoloDetector / Detection[]',
+      'Cause: conf<0.25? model load? no frames (GIL)? letterbox']},
+    {t:'Wrong speed', c:'perc', lines:[
+      'Inspect: CLS, then L2 belief',
+      'Logs: [CLS] disagree/low_conf · [SHADOW][L3] belief=',
+      'Owner: SpeedSignClassifier / L2 current_',
+      'Cause: class order · min_conf 0.70 · K too low']},
+    {t:'Repeated announcement', c:'dec', lines:[
+      'Inspect: L1 fresh + L3   (L1–L4 is the authority)',
+      'Logs: [SHADOW][L3] action · fresh · age',
+      'Owner: AnnouncementPolicy / L1 episode',
+      'Cause: false re-arm (presence dropping) · rearm too small']},
+    {t:'No reminder', c:'dec', lines:[
+      'Inspect: L3 cooldown + L1 fresh',
+      'Logs: [SHADOW][L3] SUPPRESS-CD vs REMINDER',
+      'Owner: AnnouncementPolicy last_announce_at_',
+      'Cause: 180s not elapsed (lower it) · no fresh re-encounter']},
+    {t:'No audio', c:'audio', lines:[
+      'Inspect: flags + L4',
+      'Logs: [AUDIO] ON/WARNING · missing file · aplay rc',
+      'Owner: NotificationManager',
+      'Cause: missing --shadow · wrong device · wav absent · enabled=false']},
+    {t:'Wrong audio', c:'audio', lines:[
+      'Inspect: SpeedAudioMap + L2 belief value',
+      'Logs: [SHADOW][L3] action+belief · filename',
+      'Owner: SpeedAudioMap / pending_',
+      'Cause: belief wrong (→Wrong speed) · action map · value not in known set']},
+  ];
+  const nodes={}; const cw=480, ch=300, gx=40, gy=90, padx=40, pady=40;
+  cards.forEach((cd,i)=>{
+    const col=i%3, row=(i/3)|0;
+    nodes['card'+i]={x:padx+col*(cw+gx), y:gy+row*(ch+pady), w:cw, h:ch, cls:cd.c, title:cd.t, lines:cd.lines};
+  });
+  BOARDS.push({
+    id:'b9', group:'Debug', name:'9 · Debugging Map', icon:'#ff8787',
+    title:'Board 9 — Debugging Map', sub:'symptom → inspect first · logs · data owner',
+    W:padx*2+3*cw+2*gx, H:gy+2*ch+pady+120, regions:[], nodes, edges:[],
+    notes:[{x:padx,y:gy+2*ch+pady+30,w:3*cw+2*gx,cls:'data',title:'Golden rule',
+      lines:['Read the [SHADOW][L3] line first — it shows action + L2 belief + fresh + age in one place.']}]
+  });
+})();
+
+/* ---------- BOARD 10 — LIVE SIMULATOR (interactive, animated) ---------- */
+BOARDS.push({
+  id:'b10', group:'Live Sim', name:'10 · Live Simulator', icon:'#f783ac',
+  title:'Board 10 — Live Architecture Simulator',
+  sub:'animated data-flow · live module state in every block · debugger · click a block for "why"',
+  W:2400, H:1000,
+  regions:[
+    {x:20,y:60,w:2360,h:240,cls:'perc',  label:'PERCEPTION → DECISION (main thread)'},
+    {x:2030,y:312,w:300,h:160,cls:'legacy',label:'LEGACY PATH — REMOVED at cutover 06-17'},
+    {x:1160,y:500,w:1220,h:430,cls:'shadow',label:'DECISION PIPELINE (L1–L4) — AUTHORITY · facade tick() · lock-free'},
+  ],
+  nodes:{
+    camera:      {x:40,  y:120,w:250,h:150,cls:'s_idle',title:'Camera',             lines:['Picamera2 read()','RGB888 → BGR','GIL bracketed']},
+    cameraThread:{x:330, y:120,w:250,h:150,cls:'s_idle',title:'CameraThread',        lines:['fps: —','frame #: —','capture: —']},
+    doubleBuffer:{x:620, y:120,w:250,h:150,cls:'s_idle',title:'Double Buffer',       lines:['write slot: —','read slot: —','avail: —','producer: —','consumer: —']},
+    asyncWorker: {x:910, y:120,w:250,h:150,cls:'s_idle',title:'AsyncDetectionWorker',lines:['busy: —','latest-wins: —','proc frame: —','dropped: —']},
+    yolo:        {x:1200,y:120,w:250,h:150,cls:'s_idle',title:'YOLO Detector',       lines:['conf: —','box: —','class: —','infer: —']},
+    voter:       {x:1490,y:120,w:250,h:150,cls:'s_idle',title:'TemporalVoter',       lines:['cand: —','votes: —','confirmed: —','win: []']},
+    roi:         {x:1780,y:120,w:250,h:150,cls:'s_idle',title:'ROI Selection',       lines:['BestROI latch','highest-conf crop','→ CLS on confirm']},
+    cls:         {x:2070,y:120,w:250,h:150,cls:'s_idle',title:'CLS Model',           lines:['roi: —','result: —','conf: —','infer: —']},
+    legacy:      {x:2070,y:330,w:250,h:130,cls:'legacy',title:'Legacy Pipeline ❌ removed', lines:['removed at cutover 06-17','L1–L4 is the authority','(was: [CONFIRMED] console)']},
+    l1:          {x:1200,y:560,w:250,h:150,cls:'s_idle',title:'L1 Lifecycle',        lines:['state: ARMED','last seen: —','rearm: —','fresh: —']},
+    l2:          {x:1490,y:560,w:250,h:150,cls:'s_idle',title:'L2 SpeedLimit',       lines:['state: UNKNOWN','limit: —','pending: —','K: 2','age: —']},
+    l3:          {x:1780,y:560,w:250,h:150,cls:'s_idle',title:'L3 Announce',         lines:['action: —','cooldown: —','last ann: —']},
+    l4:          {x:2070,y:560,w:250,h:150,cls:'s_idle',title:'L4 Notification',     lines:['thread: —','playing: —','slot: —','latest-wins']},
+    speaker:     {x:2070,y:760,w:250,h:140,cls:'s_idle',title:'Speaker',            lines:['MAX98357A I2S','idle']},
+  },
+  edges:[
+    {from:'camera',to:'cameraThread'},
+    {from:'cameraThread',to:'doubleBuffer'},
+    {from:'doubleBuffer',to:'asyncWorker'},
+    {from:'asyncWorker',to:'yolo'},
+    {from:'yolo',to:'voter'},
+    {from:'voter',to:'roi'},
+    {from:'roi',to:'cls'},
+    {from:'cls',to:'legacy',fromSide:'bottom',toSide:'top',cls:'legacy',label:'authority'},
+    {from:'cls',to:'l1',fromSide:'bottom',toSide:'top',label:'confirmed_value'},
+    {from:'yolo',to:'l1',fromSide:'bottom',toSide:'top',dash:true,label:'raw presence'},
+    {from:'l1',to:'l2'},
+    {from:'l2',to:'l3'},
+    {from:'l3',to:'l4'},
+    {from:'l4',to:'speaker',fromSide:'bottom',toSide:'top'},
+  ],
+  notes:[
+    {x:40,y:312,w:560,cls:'note',title:'How to drive this board',lines:[
+      'Use the control bar at the bottom of the screen.',
+      'INPUT = inject one frame · SCENARIO = run a sequence.',
+      'Debug + Next Tick = step ONE stage at a time.',
+      'Pan/zoom/select work like every other board.']},
+  ],
+});
+
+/* ============================================================
+   UI wiring
+   ============================================================ */
+const stage=document.getElementById('stage');
+const navEl=document.getElementById('nav');
+const groups={};
+BOARDS.forEach(b=>{ (groups[b.group] ||= []).push(b); });
+
+// build sidebar groups (collapsible)
+Object.keys(groups).forEach(gname=>{
+  const g=document.createElement('div'); g.className='group';
+  const head=document.createElement('div'); head.className='ghead';
+  head.innerHTML=`<span class="chev">▼</span>${esc(gname)}`;
+  head.onclick=()=> g.classList.toggle('closed');
+  g.appendChild(head);
+  const list=document.createElement('div'); list.className='glist';
+  groups[gname].forEach(b=>{
+    const it=document.createElement('div'); it.className='navitem'; it.dataset.board=b.id;
+    it.innerHTML=`<span class="dot" style="background:${b.icon}"></span>${esc(b.name.replace(/^\d+\s·\s/,''))}<span class="bn">${b.name.split(' ')[0]}</span>`;
+    it.onclick=()=> showBoard(b.id);
+    list.appendChild(it);
+  });
+  g.appendChild(list); navEl.appendChild(g);
+});
+
+// ---- interaction state ----
+let mode='pan';          // 'pan' | 'select' | 'edit'
+let activeId=null;
+
+// snapshot of original node positions (for Reset Layout)
+const ORIG={};
+BOARDS.forEach(b=>{ ORIG[b.id]={}; Object.entries(b.nodes||{}).forEach(([id,n])=>{ ORIG[b.id][id]={x:n.x,y:n.y}; }); });
+
+// build board DOM
+const PZ={};    // panzoom per board
+const DOMB={};  // {vp, svg, gNodes, gEdges} per board
+BOARDS.forEach(b=>{
+  const wrap=document.createElement('div'); wrap.className='board'; wrap.id='board-'+b.id;
+  const vp=document.createElement('div'); vp.className='viewport';
+  vp.innerHTML=buildSVG(b);
+  wrap.appendChild(vp);
+  stage.appendChild(wrap);
+  const svg=vp.querySelector('.scene');
+  DOMB[b.id]={vp, svg, gNodes:svg.querySelector('.g-nodes'), gEdges:svg.querySelector('.g-edges')};
+  PZ[b.id]=new PanZoom(vp, svg, b);
+  attachDrag(b, DOMB[b.id]);
+});
+
+function refreshBoard(b){
+  const d=DOMB[b.id];
+  d.gNodes.innerHTML=renderNodes(b);
+  d.gEdges.innerHTML=renderEdges(b);
+}
+
+// ---- node dragging (active only in Edit Layout mode) ----
+function attachDrag(board, dom){
+  const svg=dom.svg;
+  let dr=null;
+  svg.addEventListener('pointerdown', function(e){
+    if(mode!=='edit') return;
+    const g = e.target.closest && e.target.closest('.node');
+    if(!g) return;                          // empty space → viewport pans instead
+    const id=g.dataset.id, n=board.nodes[id];
+    if(!n) return;
+    e.stopPropagation(); e.preventDefault();
+    dr={g,id,sx:e.clientX,sy:e.clientY,ox:n.x,oy:n.y};
+    g.classList.add('dragging');
+    try{ svg.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  svg.addEventListener('pointermove', function(e){
+    if(!dr) return;
+    const k=PZ[board.id].k;
+    const n=board.nodes[dr.id];
+    n.x = dr.ox + (e.clientX-dr.sx)/k/S;     // screen px → scene → model units
+    n.y = dr.oy + (e.clientY-dr.sy)/k/S;
+    dr.g.setAttribute('transform',`translate(${sc(n.x)},${sc(n.y)})`);
+    dom.gEdges.innerHTML=renderEdges(board);  // live edge re-routing (labels stay attached)
+  });
+  const stop=function(e){
+    if(!dr) return;
+    dr.g.classList.remove('dragging');
+    try{ svg.releasePointerCapture(e.pointerId); }catch(_){}
+    dr=null;
+  };
+  svg.addEventListener('pointerup', stop);
+  svg.addEventListener('pointercancel', stop);
+}
+
+// viewBox-based pan/zoom — vector-crisp at any level (no CSS transform raster blur)
+function PanZoom(vp, scene, board){
+  this.vp=vp; this.scene=scene; this.board=board;
+  const self=this;
+  const SW=sc(board.W), SH=sc(board.H);   // native scene size
+  this.x=0; this.y=0; this.w=SW;          // viewBox top-left + width (height derived from aspect)
+  this.k=1; this.fitted=false;
+  this.clampW=function(w){ const vw=vp.clientWidth||1; return Math.min(Math.max(w, vw/6), Math.max(SW,SH)*4); };
+  this.apply=function(){
+    const vw=vp.clientWidth||1, vh=vp.clientHeight||1;
+    const h=this.w*vh/vw;                 // keep viewBox aspect == element aspect (no letterbox)
+    scene.setAttribute('viewBox', this.x+' '+this.y+' '+this.w+' '+h);
+    this.k=vw/this.w;                     // px per scene-unit (zoom)
+    if(activeId===board.id) zoomlbl.textContent=Math.round(this.k*100)+'%';
+  };
+  this.home=function(){                   // default view = 100% (1 scene unit = 1 px)
+    const vw=vp.clientWidth||1, vh=vp.clientHeight||1;
+    this.w=this.clampW(vw);
+    const h=this.w*vh/vw;
+    this.x = SW<=this.w ? (SW-this.w)/2 : -30;   // small boards centre; big boards start top-left
+    this.y = SH<=h ? (SH-h)/2 : -30;
+    this.fitted=true; this.apply();
+  };
+  this.fit=function(){                    // whole-board overview
+    const vw=vp.clientWidth||1, vh=vp.clientHeight||1;
+    this.w=this.clampW(Math.max(SW, SH*vw/vh)/0.94);
+    const h=this.w*vh/vw;
+    this.x=(SW-this.w)/2; this.y=(SH-h)/2; this.fitted=true; this.apply();
+  };
+  this.zoomAt=function(cx,cy,factor){
+    const vw=vp.clientWidth||1;
+    const z=vw/this.w, sx=this.x+cx/z, sy=this.y+cy/z;   // scene point under cursor
+    this.w=this.clampW(this.w/factor);
+    const nz=vw/this.w;
+    this.x=sx-cx/nz; this.y=sy-cy/nz; this.apply();
+  };
+  // wheel zoom (crisp)
+  vp.addEventListener('wheel',function(e){
+    e.preventDefault();
+    const r=vp.getBoundingClientRect();
+    self.zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY<0?1.12:1/1.12);
+  },{passive:false});
+  // drag pan (a node grab in edit mode stops the event before it reaches here)
+  let drag=false, lx=0, ly=0;
+  vp.addEventListener('pointerdown',function(e){
+    if(mode!=='pan') return;                 // pan only in Pan mode
+    drag=true; lx=e.clientX; ly=e.clientY;
+    vp.classList.add('grabbing'); try{ vp.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  vp.addEventListener('pointermove',function(e){ if(!drag)return;
+    const z=self.k;
+    self.x-=(e.clientX-lx)/z; self.y-=(e.clientY-ly)/z; lx=e.clientX; ly=e.clientY; self.apply(); });
+  const end=function(){ drag=false; vp.classList.remove('grabbing'); };
+  vp.addEventListener('pointerup',end); vp.addEventListener('pointercancel',end);
+}
+
+const boardTitle=document.getElementById('boardTitle');
+const boardSub=document.getElementById('boardSub');
+const zoomlbl=document.getElementById('zoomlbl');
+
+function showBoard(id){
+  activeId=id;
+  document.querySelectorAll('.board').forEach(el=>el.classList.toggle('active', el.id==='board-'+id));
+  document.querySelectorAll('.navitem').forEach(el=>el.classList.toggle('active', el.dataset.board===id));
+  const b=BOARDS.find(x=>x.id===id);
+  boardTitle.textContent=b.title; boardSub.textContent=b.sub;
+  if(window.__simOnShow) window.__simOnShow(id);
+  requestAnimationFrame(()=>{ const pz=PZ[id]; if(!pz.fitted){ if(b.fitDefault) pz.fit(); else pz.home(); } else pz.apply(); });
+}
+
+// ---- Edit Layout mode toggle + banner ----
+const editBanner=document.createElement('div'); editBanner.id='editBanner';
+editBanner.textContent='✏ EDIT MODE — drag nodes to reposition · switch to ✋ Pan to navigate';
+editBanner.style.display='none';
+stage.appendChild(editBanner);
+
+const panBtn=document.getElementById('panBtn');
+const selectBtn=document.getElementById('selectBtn');
+const editBtn=document.getElementById('editBtn');
+function setMode(m){
+  mode=m;
+  stage.classList.remove('mode-pan','mode-select','mode-edit');
+  stage.classList.add('mode-'+m);
+  panBtn.classList.toggle('active', m==='pan');
+  selectBtn.classList.toggle('active', m==='select');
+  editBtn.classList.toggle('active', m==='edit');
+  editBanner.style.display = m==='edit' ? 'block' : 'none';
+}
+panBtn.onclick=()=>setMode('pan');
+selectBtn.onclick=()=>setMode('select');
+editBtn.onclick=()=>setMode('edit');
+setMode('pan');   // default
+
+// ---- Reset / Export / Import layout ----
+document.getElementById('resetBtn').onclick=()=>{
+  const b=BOARDS.find(x=>x.id===activeId); if(!b) return;
+  Object.entries(ORIG[b.id]).forEach(([id,p])=>{ if(b.nodes[id]){ b.nodes[id].x=p.x; b.nodes[id].y=p.y; } });
+  refreshBoard(b);
+};
+document.getElementById('exportBtn').onclick=()=>{
+  const out={};
+  BOARDS.forEach(b=>{ out[b.id]={}; Object.entries(b.nodes||{}).forEach(([id,n])=>{ out[b.id][id]={x:Math.round(n.x),y:Math.round(n.y)}; }); });
+  const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='architecture_layout.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+const importInput=document.getElementById('importInput');
+document.getElementById('importBtn').onclick=()=> importInput.click();
+importInput.onchange=function(){
+  const f=importInput.files && importInput.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=function(){
+    try{
+      const data=JSON.parse(rd.result);
+      BOARDS.forEach(b=>{ const bd=data[b.id]; if(!bd) return;
+        Object.entries(bd).forEach(([id,p])=>{
+          if(b.nodes[id] && typeof p.x==='number' && typeof p.y==='number'){ b.nodes[id].x=p.x; b.nodes[id].y=p.y; }
+        });
+        refreshBoard(b);
+      });
+    }catch(err){ alert('Invalid layout JSON: '+err.message); }
+    importInput.value='';
+  };
+  rd.readAsText(f);
+};
+
+// ---- topbar controls ----
+document.getElementById('zoomIn').onclick=()=>{ const pz=PZ[activeId]; pz.zoomAt(pz.vp.clientWidth/2,pz.vp.clientHeight/2,1.15); };
+document.getElementById('zoomOut').onclick=()=>{ const pz=PZ[activeId]; pz.zoomAt(pz.vp.clientWidth/2,pz.vp.clientHeight/2,1/1.15); };
+document.getElementById('fit').onclick=()=> PZ[activeId].fit();
+document.getElementById('toggleSidebar').onclick=()=> document.getElementById('sidebar').classList.toggle('collapsed');
+document.getElementById('theme').onclick=()=> document.documentElement.classList.toggle('light');
+window.addEventListener('resize',()=>{ if(activeId) PZ[activeId].apply(); });
+
+// ---- Thai glossary (📖 ศัพท์) ----
+const GLOSS=[
+  // เธรด / การซิงค์
+  {t:'thread (เธรด)', c:'เธรด', d:'สายการทำงานที่รันพร้อมกันได้หลายสายในโปรเซสเดียว'},
+  {t:'main thread (เธรดหลัก)', c:'เธรด', d:'เธรดที่รัน loop หลักและการตัดสินใจทั้งหมด — L1–L4 อยู่ที่นี่'},
+  {t:'mutex', c:'เธรด', d:'กุญแจล็อกกันสองเธรดแก้ข้อมูลก้อนเดียวกันพร้อมกัน'},
+  {t:'condition variable (condvar)', c:'เธรด', d:'ตัวให้เธรด "รอ" จนกว่าจะถูกปลุกเมื่อมีงานเข้ามา'},
+  {t:'latest-wins', c:'เธรด', d:'เก็บเฉพาะค่าล่าสุด ถ้าค่าใหม่มาก่อนถูกใช้ ค่าเก่าจะถูกทิ้ง'},
+  {t:'double buffer', c:'เธรด', d:'ใช้บัฟเฟอร์ 2 ช่องสลับกัน เธรดหนึ่งเขียน อีกเธรดอ่าน ไม่ชนกัน'},
+  {t:'frame clone (สำเนาเฟรม)', c:'เธรด', d:'ก็อปปี้ภาพให้ main thread เป็นเจ้าของเอง กล้องจะได้เขียนช่องใหม่ต่อได้ทันที'},
+  {t:'producer / consumer', c:'เธรด', d:'ฝั่งผลิตข้อมูล / ฝั่งหยิบข้อมูลไปใช้'},
+  {t:'lock-free', c:'เธรด', d:'ไม่ต้องใช้ล็อกเลย เพราะโค้ดส่วนนั้นรันบนเธรดเดียว'},
+  {t:'GIL', c:'เธรด', d:'Global Interpreter Lock ของ Python — ต้องปล่อย/จับให้ถูกตอนเรียกข้ามภาษา (C++↔Python)'},
+  {t:'atomic', c:'เธรด', d:'การอ่าน/เขียนค่าที่แบ่งครึ่งไม่ได้ ปลอดภัยเมื่อใช้ข้ามเธรด'},
+  {t:'buffer / slot', c:'เธรด', d:'ช่องพักข้อมูลชั่วคราวระหว่างเธรด'},
+  {t:'dropped frame', c:'เธรด', d:'เฟรมที่ถูกทิ้งเพราะประมวลผลไม่ทัน (มีเฟรมใหม่กว่ามาแล้ว)'},
+
+  // การมองเห็น
+  {t:'YOLO', c:'มองเห็น', d:'โมเดลตรวจจับวัตถุ บอกว่า "มีป้ายไหม + อยู่ตรงไหน" (ไม่ฟันธงค่าตัวเลขบนป้าย)'},
+  {t:'inference', c:'มองเห็น', d:'การรันโมเดลกับภาพเพื่อให้ได้ผลลัพธ์'},
+  {t:'NMS (Non-Max Suppression)', c:'มองเห็น', d:'ตัดกล่องที่ซ้อนทับกัน เหลือกล่องที่มั่นใจที่สุดต่อวัตถุหนึ่งชิ้น'},
+  {t:'letterbox', c:'มองเห็น', d:'ย่อ/ขยายภาพให้เป็นจัตุรัสตามขนาดโมเดล โดยเติมขอบไม่ให้ภาพบิดเบี้ยว'},
+  {t:'confidence (conf)', c:'มองเห็น', d:'คะแนนความมั่นใจของโมเดล มีค่า 0–1'},
+  {t:'ROI (Region of Interest)', c:'มองเห็น', d:'บริเวณภาพที่สนใจ = กล่องป้ายที่จะส่งให้ classifier'},
+  {t:'BestROI', c:'มองเห็น', d:'เก็บ crop ที่ YOLO มั่นใจสูงสุดในรอบโหวต เพื่อส่งภาพที่คมที่สุดให้ classifier'},
+  {t:'classifier (CLS)', c:'มองเห็น', d:'โมเดลจำแนกว่าเป็นป้ายเลขอะไร (50/60/80/90/100) — เป็น "เจ้าของค่า" (value authority)'},
+  {t:'Confirm-then-Classify', c:'มองเห็น', d:'จำแนกครั้งเดียวตอนยืนยันแล้วเท่านั้น ไม่จำแนกทุกเฟรม — ประหยัดและกัน noise'},
+  {t:'IoU', c:'มองเห็น', d:'สัดส่วนพื้นที่ซ้อนทับของสองกล่อง ใช้ตัดสินว่ากล่องซ้ำกันไหม'},
+
+  // การตัดสินใจ / belief
+  {t:'TemporalVoter (ตัวโหวต)', c:'ตัดสินใจ', d:'สะสมผลหลายเฟรมแล้วค่อยยืนยัน เพื่อกันการสั่น/รบกวนของ YOLO'},
+  {t:'vote / confirm', c:'ตัดสินใจ', d:'โหวต / ยืนยันผลเมื่อสะสมเสียงพอ (เช่น 4 จาก 10 เฟรม)'},
+  {t:'CooldownManager', c:'ตัดสินใจ', d:'(REMOVED 06-17) เดิมกันประกาศซ้ำ; ตอนนี้ anti-spam อยู่ที่ L3'},
+  {t:'belief state (สถานะความเชื่อ)', c:'ตัดสินใจ', d:'ค่าที่ระบบ "เชื่อว่าเป็นจริงตอนนี้" — ต้องประเมินเอา ไม่ใช่เห็นตรง ๆ จากเฟรมเดียว'},
+  {t:'K-hysteresis', c:'ตัดสินใจ', d:'ค่าใหม่ที่ต่างจากเดิมต้องยืนยันติดกัน K ครั้งก่อนจึงเปลี่ยนความเชื่อ (กันสั่น)'},
+  {t:'no-forget (ไม่ลืม)', c:'ตัดสินใจ', d:'ถึงป้ายจะหายไปจากเฟรม ก็ไม่ลบความเชื่อเดิม (ไม่กลับเป็น UNKNOWN)'},
+  {t:'episode', c:'ตัดสินใจ', d:'ช่วง "การเห็นป้ายหนึ่งครั้ง" ตั้งแต่เริ่มเห็นจนหายไป'},
+  {t:'fresh', c:'ตัดสินใจ', d:'เป็นการเห็น "ใหม่" หลังป้ายหายไปแล้วกลับมา — ใช้ตัดสินว่าจะย้ำเตือนไหม'},
+  {t:'re-arm', c:'ตัดสินใจ', d:'รีเซ็ตสถานะให้พร้อมเริ่ม episode ใหม่ เมื่อป้ายหายไปนานพอ'},
+  {t:'facade (ฟาซาด)', c:'ตัดสินใจ', d:'คลาสบาง ๆ ที่ห่อและเดินสาย L1→L2→L3→L4 รวมไว้ที่เดียว'},
+  {t:'shadow (โหมดเงา)', c:'ตัดสินใจ', d:'เดิมรันคู่ขนานเพื่อทดสอบ; cutover 06-17 แล้ว — L1–L4 เป็นตัวตัดสินจริง'},
+  {t:'authority (อำนาจตัดสิน)', c:'ตัดสินใจ', d:'ฝั่งที่ผลลัพธ์ถูกใช้จริง — ปัจจุบัน = L1–L4 (cutover 06-17); legacy ถูกถอดออกแล้ว'},
+  {t:'legacy path', c:'ตัดสินใจ', d:'ของเดิม (voter + cooldown, พิมพ์ [CONFIRMED]) — REMOVED ตอน cutover 06-17; L1–L4 แทน'},
+  {t:'L1 SignEpisodeLifecycle', c:'ตัดสินใจ', d:'ชั้นที่ดูว่า "เห็นใหม่หรือเห็นต่อเนื่อง" (presence / episode / fresh)'},
+  {t:'L2 CurrentSpeedLimitManager', c:'ตัดสินใจ', d:'ชั้นเก็บความเชื่อค่าจำกัดความเร็วปัจจุบัน + K + no-forget'},
+  {t:'L3 AnnouncementPolicy', c:'ตัดสินใจ', d:'ชั้นตัดสินว่าจะพูดอะไร: CHANGE / REMINDER / SUPPRESS'},
+  {t:'CHANGE / REMINDER / SUPPRESS', c:'ตัดสินใจ', d:'เปลี่ยน(ประกาศค่าใหม่) / ย้ำเตือนค่าเดิม / เงียบ'},
+  {t:'run_decision()', c:'ตัดสินใจ', d:'ฟังก์ชันรวมการตัดสินใจทั้งหมดต่อหนึ่งเฟรม (รันบน main thread)'},
+
+  // เสียง
+  {t:'L4 NotificationManager', c:'เสียง', d:'ตัวจัดการเล่นเสียงแจ้งเตือน มีเธรดเสียงของตัวเอง'},
+  {t:'SpeedAudioMap', c:'เสียง', d:'แปลง (action, ค่า) → ชื่อไฟล์เสียง เช่น "change_50.wav"'},
+  {t:'aplay', c:'เสียง', d:'โปรแกรมเล่นไฟล์เสียง .wav บน Linux / Raspberry Pi'},
+  {t:'preemption (kill-aplay)', c:'เสียง', d:'ป้าย safety แทรกคลิปที่กำลังเล่นได้กลางคัน (ฆ่า aplay ผ่าน posix_spawn) — เดิมเล่นจนจบ'},
+  {t:'MAX98357A / I2S', c:'เสียง', d:'ชิปแอมป์ขยายเสียงดิจิทัล + มาตรฐานสายส่งสัญญาณเสียง'},
+
+  // ทั่วไป
+  {t:'AppConfig', c:'ทั่วไป', d:'ที่เก็บค่าตั้งค่าทั้งหมดของโปรแกรม (อ่านมาจาก CLI flags)'},
+  {t:'CLI flags', c:'ทั่วไป', d:'ตัวเลือกบนบรรทัดคำสั่ง เช่น --shadow --audio --shadow-k'},
+  {t:'pipeline', c:'ทั่วไป', d:'สายท่อประมวลผลที่ข้อมูลไหลผ่านเป็นขั้น ๆ'},
+  {t:'lifecycle (วงจรชีวิต)', c:'ทั่วไป', d:'ลำดับขั้นตั้งแต่ capture จนถึง play เสียง'},
+  {t:'StageTimes / metrics', c:'ทั่วไป', d:'เวลาที่ใช้แต่ละขั้น และตัววัดประสิทธิภาพ เช่น FPS'},
+];
+const glossary=document.createElement('aside'); glossary.id='glossary';
+glossary.innerHTML='<div class="ghd"><h2>📖 อธิบายศัพท์ (ไทย)</h2><button class="gclose" id="gclose" title="ปิด">✕</button></div>'+
+  '<div class="gsub">คำศัพท์ที่ใช้ในไดอะแกรม พร้อมคำอธิบายภาษาไทย</div>'+
+  '<input id="gsearch" placeholder="ค้นหา… (เช่น mutex, belief, เธรด)" />'+
+  '<div id="glist"></div>';
+stage.appendChild(glossary);
+const glist=glossary.querySelector('#glist');
+function renderGloss(q){
+  q=(q||'').trim().toLowerCase();
+  glist.innerHTML=GLOSS.map(g=>{
+    const hide = q && !((g.t+' '+g.d+' '+g.c).toLowerCase().includes(q));
+    return '<div class="gitem'+(hide?' ghidden':'')+'">'+
+      '<div class="gt">'+esc(g.t)+'<span class="gcat">'+esc(g.c)+'</span></div>'+
+      '<div class="gd">'+esc(g.d)+'</div></div>';
+  }).join('');
+}
+renderGloss('');
+const glossaryBtn=document.getElementById('glossaryBtn');
+glossaryBtn.onclick=()=>{ const open=glossary.classList.toggle('open'); glossaryBtn.classList.toggle('active',open); };
+document.getElementById('gclose').onclick=()=>{ glossary.classList.remove('open'); glossaryBtn.classList.remove('active'); };
+glossary.querySelector('#gsearch').addEventListener('input',e=>renderGloss(e.target.value));
+
+// floating hint
+const hint=document.createElement('div'); hint.className='hint';
+hint.textContent='modes: ✋ Pan · 📝 Select · ✏ Edit   ·   scroll = zoom · ⤢ = fit';
+stage.appendChild(hint);
+setTimeout(()=>hint.remove(), 7000);
+
+/* ============================================================
+   BOARD 10 — LIVE SIMULATION ENGINE  (faithful L1–L4 semantics)
+   ============================================================ */
+(function(){
+  const B10 = BOARDS.find(x=>x.id==='b10');
+  const SIM_SIGNS=['sign_50','sign_60','sign_80','sign_90','sign_100'];
+  const SIM_STCLS={idle:'s_idle',processing:'s_proc',success:'s_ok',rejected:'s_rej',waiting:'s_wait'};
+  const SIM_DOT  ={idle:'#94a3b8',processing:'#eab308',success:'#22c55e',rejected:'#ef4444',waiting:'#3b82f6'};
+  const MODS=['camera','cameraThread','doubleBuffer','asyncWorker','yolo','voter','roi','cls','legacy','l1','l2','l3','l4','speaker'];
+  const BASE_EDGES = B10.edges.map(e=>({...e}));
+
+  const simRnd=(a,b)=>+(a+Math.random()*(b-a)).toFixed(2);
+  const simJit=(b,s)=>+(b+(Math.random()*2-1)*s).toFixed(1);
+  const simBox=()=>[120+Math.round(Math.random()*60),80+Math.round(Math.random()*40),
+                    64+Math.round(Math.random()*36),64+Math.round(Math.random()*36)];
+  const simNum=s=> s? s.replace('sign_',''):null;
+
+  function simFresh(cfg){
+    return {now:0,frameId:0,tickCount:0,config:cfg,tmp:{},colors:{},activeBlock:null,lastTick:null,log:[],
+      camera:{fps:0,latestFrameId:0,captureTs:0},
+      doubleBuffer:{writeSlot:0,readSlot:1,latestAvailable:false,producerActive:false,consumerActive:false},
+      worker:{busy:false,latestWins:true,processingFrame:0,dropped:0},
+      yolo:{conf:0,box:null,cls:'—',inferMs:0},
+      voter:{candidate:'—',votes:0,required:cfg.requiredVotes,confirmed:false,window:[]},
+      cls:{roiSize:'—',result:'—',conf:0,inferMs:0},
+      l1:{state:'ARMED',lastSeen:0,rearmActive:false,fresh:false},
+      l2:{state:'UNKNOWN',current:null,pending:null,pendingCount:0}, l2meta:{lastConfirmedAt:0},
+      l3:{lastAction:'—',lastAnnounceAt:null},
+      l4:{threadActive:false,playing:'—',pendingSlot:'—',queueState:'latest-wins (1 slot)'}};
+  }
+  function simL2(s,value){
+    const K=s.config.K;
+    if(s.l2.state==='UNKNOWN'){ s.l2.current=value; s.l2.state='ACTIVE'; s.l2.pending=null; s.l2.pendingCount=0;
+      s.l2meta.lastConfirmedAt=s.now; return {changed:true,event:'Acquire'}; }
+    if(value===s.l2.current){ s.l2meta.lastConfirmedAt=s.now; s.l2.pending=null; s.l2.pendingCount=0;
+      return {changed:false,event:'Reconfirm'}; }
+    if(s.l2.pending===value) s.l2.pendingCount++; else {s.l2.pending=value; s.l2.pendingCount=1;}
+    if(s.l2.pendingCount>=K){ s.l2.current=value; s.l2meta.lastConfirmedAt=s.now; s.l2.pending=null; s.l2.pendingCount=0;
+      return {changed:true,event:'Change(K='+K+')'}; }
+    return {changed:false,event:'Pending '+s.l2.pendingCount+'/'+K};
+  }
+  function simL3(s,changed,fresh){
+    const cd=s.config.reminderMs;
+    if(changed){ s.l3.lastAction='CHANGE'; s.l3.lastAnnounceAt=s.now; return {action:'CHANGE',announce:true}; }
+    if(fresh){ if(s.l3.lastAnnounceAt==null || (s.now-s.l3.lastAnnounceAt)>=cd){
+        s.l3.lastAction='REMINDER'; s.l3.lastAnnounceAt=s.now; return {action:'REMINDER',announce:true}; }
+      s.l3.lastAction='SUPPRESS-CD'; return {action:'SUPPRESS-CD',announce:false}; }
+    s.l3.lastAction='SUPPRESS-CONT'; return {action:'SUPPRESS-CONT',announce:false};
+  }
+
+  function simBuildStages(frame){
+    const lg=(s,c,t)=>{ s.tickCount++; s.lastTick={n:s.tickCount,label:t,color:c};
+      s.log.push({n:s.tickCount,label:t,color:c}); if(s.log.length>240)s.log.shift(); };
+    return [
+     {block:'camera',run:s=>{ s.tmp={}; s.colors={}; s.activeBlock='camera';
+        if(frame.advanceMs) s.now+=frame.advanceMs;
+        s.frameId++; s.camera.latestFrameId=s.frameId; s.camera.captureTs=s.now;
+        s.camera.fps=+(1000/s.config.intervalMs).toFixed(1);
+        s.colors.camera='success'; s.tmp.input=frame.input; s.tmp.cls=frame.clsOverride;
+        lg(s,'success',`CAMERA: capture frame #${s.frameId} @ t+${s.now}ms`+(frame.advanceMs?` (clock +${frame.advanceMs}ms)`:'')); }},
+     {block:'doubleBuffer',run:s=>{ s.activeBlock='doubleBuffer'; const prev=s.doubleBuffer.writeSlot;
+        s.doubleBuffer.writeSlot=1-prev; s.doubleBuffer.readSlot=prev; s.doubleBuffer.latestAvailable=true;
+        s.doubleBuffer.producerActive=true; s.doubleBuffer.consumerActive=true;
+        s.colors.cameraThread='success'; s.colors.doubleBuffer='success';
+        lg(s,'success',`DOUBLE BUFFER: write→slot ${s.doubleBuffer.writeSlot}, read→slot ${s.doubleBuffer.readSlot} (consumer clones)`); }},
+     {block:'asyncWorker',run:s=>{ s.activeBlock='asyncWorker'; s.worker.busy=true; s.worker.latestWins=true;
+        s.worker.processingFrame=s.frameId; s.colors.asyncWorker='processing';
+        lg(s,'processing',`ASYNC WORKER: submit frame #${s.frameId} (latest-wins, dropped=${s.worker.dropped})`); }},
+     {block:'yolo',run:s=>{ s.activeBlock='yolo'; s.yolo.inferMs=simJit(93,8); const inp=s.tmp.input;
+        if(inp){ s.yolo.conf=simRnd(.55,.95); s.yolo.box=simBox(); s.yolo.cls=inp; s.tmp.presence=true; s.colors.yolo='success';
+          lg(s,'success',`YOLO: detected ${inp} conf=${s.yolo.conf} box=[${s.yolo.box}] (${s.yolo.inferMs}ms)`); }
+        else { s.yolo.conf=0; s.yolo.box=null; s.yolo.cls='—'; s.tmp.presence=false; s.colors.yolo='idle';
+          lg(s,'idle',`YOLO: no detection (NULL) (${s.yolo.inferMs}ms)`); }
+        s.worker.busy=false; }},
+     {block:'voter',run:s=>{ s.activeBlock='voter'; const w=s.voter.window.slice(); w.push(s.tmp.input||null);
+        while(w.length>s.config.voteWindow) w.shift();
+        const cnt={}; w.forEach(v=>{ if(v) cnt[v]=(cnt[v]||0)+1; });
+        let cand=null,best=0; Object.keys(cnt).sort().forEach(k=>{ if(cnt[k]>best){best=cnt[k];cand=k;} });
+        const confirmed=!!cand && best>=s.config.requiredVotes;
+        s.voter={candidate:cand||'—',votes:best,required:s.config.requiredVotes,confirmed,window:w};
+        s.tmp.confirmed=confirmed; s.tmp.candidate=cand;
+        s.colors.voter=confirmed?'success':(best>0?'processing':'idle');
+        lg(s,confirmed?'success':(best>0?'processing':'idle'),
+          `VOTER: ${cand||'—'} ${best}/${s.config.requiredVotes} → ${confirmed?'CONFIRMED':'accumulating'}`); }},
+     {block:'cls',run:s=>{ s.activeBlock='cls';
+        if(s.tmp.confirmed){ const val=(s.tmp.cls!=null)?s.tmp.cls:s.tmp.candidate;
+          s.cls={roiSize:'64×64',result:val,conf:simRnd(.70,.96),inferMs:simJit(8,2)};
+          s.tmp.value=val; s.colors.roi='success'; s.colors.cls='success';
+          lg(s,'success',`ROI+CLS: classify best crop → value=${val} conf=${s.cls.conf} (${s.cls.inferMs}ms)`); }
+        else { s.colors.roi='idle'; s.colors.cls='idle'; lg(s,'idle',`CLS: skipped (no confirm) — Confirm-then-Classify`); } }},
+     {block:'l1',run:s=>{ s.activeBlock='l1'; const presence=s.tmp.presence,confirmed=s.tmp.confirmed;
+        const now=s.now,rearm=s.config.rearmMs;
+        if(presence) s.l1.lastSeen=now;
+        let fired=false,fresh=false; const st=s.l1.state;
+        if(st==='ARMED'){ if(confirmed){ s.l1.state='CONFIRMED'; fired=true; fresh=true; } }
+        else if(st==='CONFIRMED'){ if(confirmed){ fired=true; fresh=false; } else if(!presence){ s.l1.state='RELEASING'; } }
+        else if(st==='RELEASING'){ if(confirmed){ s.l1.state='CONFIRMED'; fired=true; fresh=false; } else if(presence){ s.l1.state='CONFIRMED'; } }
+        if(s.l1.state==='RELEASING' && (now-s.l1.lastSeen)>=rearm){ s.l1.state='ARMED'; }
+        s.l1.fresh=fresh; s.l1.rearmActive=(s.l1.state==='RELEASING');
+        s.tmp.fired=fired; s.tmp.fresh=fresh;
+        s.colors.l1=fired?'success':(s.l1.state==='RELEASING'?'waiting':'idle');
+        lg(s,fired?'success':'idle',`L1: state=${s.l1.state} ${fired?'FIRE{value='+s.tmp.value+', fresh='+fresh+'}':'(no fire)'}`); }},
+     {block:'l2',run:s=>{ s.activeBlock='l2';
+        if(s.tmp.fired){ const r=simL2(s,s.tmp.value); s.tmp.changed=r.changed;
+          s.colors.l2=r.changed?'success':(r.event.indexOf('Pending')===0?'waiting':'processing');
+          lg(s,r.changed?'success':'processing',`L2: ${r.event} → belief=${s.l2.current!=null?simNum(s.l2.current):'UNKNOWN'}`+(r.changed?'  [changed]':'')); }
+        else { s.tmp.changed=false; s.colors.l2='idle';
+          lg(s,'idle',`L2: idle (no fire) belief=${s.l2.current!=null?simNum(s.l2.current):'UNKNOWN'}`); } }},
+     {block:'l3',run:s=>{ s.activeBlock='l3';
+        if(s.tmp.fired){ const r=simL3(s,s.tmp.changed,s.tmp.fresh); s.tmp.action=r.action; s.tmp.announce=r.announce;
+          const ok=r.action==='CHANGE'||r.action==='REMINDER'; s.colors.l3=ok?'success':'rejected';
+          lg(s,ok?'success':'rejected',`L3: ${r.action}${ok?' 🔊 (reset cooldown)':' (silent)'}`); }
+        else { s.tmp.announce=false; s.colors.l3='idle'; lg(s,'idle',`L3: idle`); } }},
+     {block:'l4',run:s=>{ s.activeBlock='l4';
+        if(s.tmp.announce){ const v=simNum(s.l2.current); const fn=`${s.tmp.action.toLowerCase()}_${v}.wav`;
+          s.l4={threadActive:true,playing:fn,pendingSlot:fn,queueState:'latest-wins (1 slot)'};
+          s.colors.l4='success'; s.colors.speaker='success';
+          lg(s,'success',`L4: notify → slot="${fn}" → 🔊 SPEAKER plays "${fn}"`); }
+        else { s.l4.threadActive=false; s.colors.l4='idle'; s.colors.speaker='idle'; lg(s,'idle',`L4: nothing to play (queue idle)`); }
+        s.now+=s.config.intervalMs; }},
+    ];
+  }
+
+  // ---- scenarios (Req 5) ----
+  const det=(sg,n,cls)=>{const a=[];for(let i=0;i<(n||1);i++)a.push({input:sg,clsOverride:cls});return a;};
+  const SIM_SCEN={
+    A:{setK:1,frames:[...det('sign_80',3)]},
+    B:{setK:1,frames:[{input:'sign_80'},{input:null},{input:'sign_80'},{input:null},{input:'sign_80'}]},
+    C:{setK:1,frames:[...det('sign_50',2),...det('sign_60',3)]},
+    D:{setK:1,frames:[...det('sign_50',3)]},
+    E:{setK:1,frames:[...det('sign_80',2),{input:null,advanceMs:181000},...det('sign_80',2)]},
+    F:{setK:2,frames:[...det('sign_50',2),{input:'sign_50',clsOverride:'sign_80'},
+                      {input:'sign_50',clsOverride:'sign_50'},{input:'sign_50',clsOverride:'sign_50'}]},
+  };
+
+  // ---- runtime state ----
+  let simState=simFresh({requiredVotes:2,voteWindow:10,K:1,rearmMs:600,reminderMs:180000,intervalMs:100,speed:550});
+  let simQueue=[], simPend=[], simTimer=null, simDebug=false, simInit=false;
+
+  function simLines(s,id){
+    const tt=v=>v==null?'—':'t+'+v+'ms';
+    switch(id){
+      case'camera':return['Picamera2 read()','RGB888 → BGR','GIL bracketed'];
+      case'cameraThread':return['fps: '+s.camera.fps,'frame #: '+s.camera.latestFrameId,'capture: '+tt(s.camera.captureTs)];
+      case'doubleBuffer':return['write slot: '+s.doubleBuffer.writeSlot,'read slot: '+s.doubleBuffer.readSlot,'avail: '+s.doubleBuffer.latestAvailable,'producer: '+s.doubleBuffer.producerActive,'consumer: '+s.doubleBuffer.consumerActive];
+      case'asyncWorker':return['busy: '+s.worker.busy,'latest-wins: '+s.worker.latestWins,'proc frame: '+s.worker.processingFrame,'dropped: '+s.worker.dropped];
+      case'yolo':return['conf: '+s.yolo.conf,'box: '+(s.yolo.box?'['+s.yolo.box+']':'—'),'class: '+s.yolo.cls,'infer: '+s.yolo.inferMs+'ms'];
+      case'voter':return['cand: '+s.voter.candidate,'votes: '+s.voter.votes+'/'+s.voter.required,'confirmed: '+s.voter.confirmed,'win:['+s.voter.window.map(x=>x?simNum(x):'·').join(',')+']'];
+      case'roi':return['BestROI latch','highest-conf crop','→ CLS on confirm'];
+      case'cls':return['roi: '+s.cls.roiSize,'result: '+s.cls.result,'conf: '+s.cls.conf,'infer: '+s.cls.inferMs+'ms'];
+      case'legacy':return['REMOVED at cutover 06-17','was: voter + cooldown → [CONFIRMED]','L1–L4 is now the authority'];
+      case'l1':return['state: '+s.l1.state,'last seen: '+tt(s.l1.lastSeen),'rearm: '+s.l1.rearmActive,'fresh: '+s.l1.fresh];
+      case'l2':return['state: '+s.l2.state,'limit: '+(s.l2.current!=null?simNum(s.l2.current):'—'),'pending: '+(s.l2.pending!=null?simNum(s.l2.pending):'—')+' ('+s.l2.pendingCount+')','K: '+s.config.K,'age: '+(s.l2.state==='ACTIVE'?((s.now-s.l2meta.lastConfirmedAt)/1000).toFixed(1)+'s':'—')];
+      case'l3':{const cd=s.l3.lastAnnounceAt==null?0:Math.max(0,(s.config.reminderMs-(s.now-s.l3.lastAnnounceAt))/1000);
+        return['action: '+s.l3.lastAction,'cooldown: '+cd.toFixed(1)+'s left','last ann: '+tt(s.l3.lastAnnounceAt)];}
+      case'l4':return['thread: '+s.l4.threadActive,'playing: '+s.l4.playing,'slot: '+s.l4.pendingSlot,'latest-wins'];
+      case'speaker':return['MAX98357A I2S',(s.colors.speaker==='success'?'🔊 '+s.l4.playing:'idle')];
+    }
+    return[];
+  }
+  function simRender(){
+    const s=simState;
+    MODS.forEach(id=>{ const n=B10.nodes[id]; if(!n)return;
+      n.lines=simLines(s,id); n.active=(s.activeBlock===id);
+      n.cls = (id==='legacy') ? 'legacy' : SIM_STCLS[s.colors[id]||'idle']; });
+    B10.edges = BASE_EDGES.map(e=>{ const c={...e}; if(e.to===s.activeBlock){c.cls='active';c.dash=false;} return c; });
+    refreshBoard(B10);
+    hudTickN.textContent='TICK '+(s.lastTick?s.lastTick.n:0);
+    hudTickL.textContent=s.lastTick?s.lastTick.label:'idle — pick INPUT / SCENARIO or step Next Tick';
+    hudTickL.style.color=s.lastTick?SIM_DOT[s.lastTick.color]:'#94a3b8';
+    hudLog.innerHTML=s.log.slice(-50).reverse().map(l=>
+      `<div style="color:${SIM_DOT[l.color]}"><span style="color:#64748b">#${String(l.n).padStart(3,'0')}</span> ${esc(l.label)}</div>`).join('');
+  }
+  function simStop(){ if(simTimer){clearTimeout(simTimer);simTimer=null;} hudRun.textContent='⏩ Auto Run'; }
+  function simStep(){
+    if(simPend.length===0){ if(simQueue.length===0) return false; simPend=simBuildStages(simQueue.shift()); }
+    const st=simPend.shift(); st.run(simState); simRender(); return true;
+  }
+  function simAutorun(){ simStop(); hudRun.textContent='⏸ Pause';
+    const tick=()=>{ const more=simStep(); if(more){ simTimer=setTimeout(tick,simState.config.speed); } else { simStop(); } };
+    tick(); }
+  function simReset(){ simStop(); simState=simFresh({...simState.config}); simState.voter.required=simState.config.requiredVotes;
+    simQueue=[]; simPend=[]; simRender(); }
+  function simEnqueue(input,cls){ simQueue.push({input,clsOverride:cls}); if(!simDebug){ if(!simTimer) simAutorun(); } else simRender(); }
+  function simRunScenario(k){ const sc=SIM_SCEN[k]; if(!sc)return;
+    if(sc.setK!=null){ simState.config.K=sc.setK; hudK.value=sc.setK; hudKV.textContent=sc.setK; }
+    simReset(); simQueue=sc.frames.map(f=>({...f})); simPend=[];
+    if(simDebug) simRender(); else simAutorun(); }
+
+  /* ---------- HUD overlay ---------- */
+  const css=document.createElement('style');
+  css.textContent=`.simbtn{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    border-radius:7px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif}
+    .simbtn:hover{border-color:var(--accent)} .simbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+    #simHUD input[type=range]{vertical-align:middle} #simHUD label{white-space:nowrap}`;
+  document.head.appendChild(css);
+
+  const hud=document.createElement('div'); hud.id='simHUD';
+  hud.style.cssText='position:absolute;left:0;right:0;bottom:0;z-index:8;display:none;background:var(--panel);border-top:1px solid var(--line);padding:8px 12px';
+  hud.innerHTML=`
+   <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center">
+     <div id="simInputs" style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:var(--ink2)">INPUT</span></div>
+     <div id="simScens" style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:var(--ink2)">SCENARIO</span></div>
+     <div style="display:flex;gap:6px;align-items:center">
+       <button class="simbtn" id="simDbg">○ Debug</button>
+       <button class="simbtn" id="simNext">▶ Next Tick</button>
+       <button class="simbtn" id="simRun">⏩ Auto Run</button>
+       <button class="simbtn" id="simRst">↺ Reset</button>
+     </div>
+     <div style="display:flex;gap:11px;align-items:center;font-size:10px;color:var(--ink2)">
+       <label>votes <input id="simVotes" type="range" min="1" max="6" value="2" style="width:64px"> <b id="simVotesV" style="color:var(--ink)">2</b></label>
+       <label>K <input id="simK" type="range" min="1" max="3" value="1" style="width:46px"> <b id="simKV" style="color:var(--ink)">1</b></label>
+       <label>reminder <select id="simRem" style="background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:5px"><option value="180000">180s</option><option value="10000">10s</option></select></label>
+       <label>speed <input id="simSpeed" type="range" min="120" max="1100" step="20" value="550" style="width:84px"> <b id="simSpeedV" style="color:var(--ink)">550ms</b></label>
+     </div>
+   </div>
+   <div style="margin-top:6px;display:flex;gap:8px;align-items:baseline">
+     <span id="simTickN" style="font-size:10px;color:var(--ink2)">TICK 0</span>
+     <span id="simTickL" style="font-size:11.5px;font-weight:600;color:#94a3b8">idle — pick INPUT / SCENARIO or step Next Tick</span>
+   </div>
+   <div id="simLog" style="margin-top:4px;height:72px;overflow-y:auto;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-family:ui-monospace,monospace;font-size:10px;line-height:1.5"></div>`;
+  stage.appendChild(hud);
+
+  const $=s=>hud.querySelector(s);
+  const hudTickN=$('#simTickN'), hudTickL=$('#simTickL'), hudLog=$('#simLog');
+  const hudRun=$('#simRun'), hudK=$('#simK'), hudKV=$('#simKV');
+  // input buttons
+  SIM_SIGNS.forEach(sg=>{ const b=document.createElement('button'); b.className='simbtn';
+    b.style.borderColor='#2c6a8f'; b.style.color='#9bd2f0'; b.textContent=sg.replace('sign_','');
+    b.onclick=()=>simEnqueue(sg); $('#simInputs').appendChild(b); });
+  (function(){ const b=document.createElement('button'); b.className='simbtn'; b.textContent='NULL';
+    b.onclick=()=>simEnqueue(null); $('#simInputs').appendChild(b); })();
+  // scenario buttons
+  Object.keys(SIM_SCEN).forEach(k=>{ const b=document.createElement('button'); b.className='simbtn';
+    b.style.borderColor='#7c5cc4'; b.style.color='#cdbbf2'; b.textContent=k;
+    b.title=({A:'Normal detection 80×3',B:'YOLO flicker (no re-arm)',C:'Gapless 50→60',D:'Repeat same → SUPPRESS',E:'Reminder after 180s',F:'False CLS, K=2 rejects'})[k];
+    b.onclick=()=>simRunScenario(k); $('#simScens').appendChild(b); });
+  // controls
+  $('#simDbg').onclick=function(){ simDebug=!simDebug; this.classList.toggle('on',simDebug);
+    this.textContent=simDebug?'● DEBUG':'○ Debug'; simStop(); };
+  $('#simNext').onclick=()=>simStep();
+  hudRun.onclick=()=>{ if(simTimer) simStop(); else simAutorun(); };
+  $('#simRst').onclick=()=>simReset();
+  $('#simVotes').oninput=function(){ simState.config.requiredVotes=+this.value; simState.voter.required=+this.value; $('#simVotesV').textContent=this.value; simRender(); };
+  hudK.oninput=function(){ simState.config.K=+this.value; hudKV.textContent=this.value; simRender(); };
+  $('#simRem').onchange=function(){ simState.config.reminderMs=+this.value; simRender(); };
+  $('#simSpeed').oninput=function(){ simState.config.speed=+this.value; $('#simSpeedV').textContent=this.value+'ms'; };
+
+  /* ---------- "why" popup (Req 7) ---------- */
+  const WHY={
+    camera:{t:'Camera',p:['Captures frames from the Pi camera (Picamera2, embedded CPython).','Converts RGB888 → BGR for OpenCV/NCNN.'],w:['No image source — nothing to detect.'],y:['read() crosses C++↔Python, so the GIL must be Ensure/Release-bracketed or the interpreter corrupts.'],th:'ต้นทางภาพ — อ่านเฟรมจากกล้องแล้วแปลงสี'},
+    cameraThread:{t:'CameraThread',p:['Optional capture thread (--async-camera) so capture never blocks decisions.','Owns the double buffer.'],w:['Capture runs inline → stalls perception.'],y:['Decouples the camera clock from the inference clock.'],th:'เธรดกล้อง — แยกการอ่านภาพออกจาก loop หลัก'},
+    doubleBuffer:{t:'Double Buffer',p:['Two slots: one written by camera, one read by consumer (a clone).','Per-slot mutex + atomic ready-index.'],w:['Camera writes while YOLO reads the SAME cv::Mat → torn frame / corruption / race.'],y:['Producer and consumer never touch the same memory at once. Clone ≈ 0.1 ms.'],th:'บัฟเฟอร์คู่ — แยกหน่วยความจำเขียน(กล้อง)กับอ่าน(YOLO) กัน race condition'},
+    asyncWorker:{t:'AsyncDetectionWorker',p:['Runs YOLO off-main; single pending/result slot; latest-wins; counts dropped frames.'],w:['YOLO (~93 ms) blocks the loop every frame → FPS collapses.'],y:['YOLO is slower than capture. Latest-wins drops stale frames → FRESHNESS over completeness; a backlog makes the speaker announce the past.'],th:'เวิร์กเกอร์ — รัน YOLO แยกเธรด ใช้ latest-wins ทิ้งเฟรมเก่า เอาความสด'},
+    yolo:{t:'YOLO Detector',p:['Detects "is there a speed sign, and where" → presence + bounding box.','letterbox → ncnn → NMS.'],w:['No localisation; nothing to vote on or classify.'],y:['Authority split: YOLO owns PRESENCE + ROI, NOT the value. Its sub-class is unstable — the number is decided by CLS.'],th:'ตรวจจับป้าย — บอกว่ามีป้ายไหม+ตรงไหน (ไม่ฟันธงตัวเลข)'},
+    voter:{t:'TemporalVoter',p:['Accumulates detections over a window; CONFIRMS only when a class hits the vote threshold.'],w:['Every noisy YOLO frame would fire the pipeline → flicker = false events.'],y:['Temporal filtering: one frame is not a decision. Production uses 4-of-10; this sim defaults lower so short demos confirm — adjust "votes".'],th:'ตัวโหวตตามเวลา — สะสมหลายเฟรมแล้วค่อยยืนยัน กันการสั่น'},
+    roi:{t:'ROI Selection',p:['Keeps the highest-confidence crop per class during a voting window; cleared on confirm.'],w:['Classifier runs on a blurry/partial frame → worse accuracy.'],y:['Confirm-then-Classify: classify ONCE, on the best crop, at the confirm event.'],th:'เลือก ROI — เก็บ crop ที่ชัดสุดในรอบโหวต'},
+    cls:{t:'CLS Model',p:['Classifies the actual number (50/60/80/90/100). Runs only at a confirm event.'],w:['You would trust the unstable YOLO sub-class → wrong speed under flicker.'],y:['CLS is the VALUE AUTHORITY. Separating presence (YOLO) from value (CLS) is the core redesign.'],th:'โมเดลจำแนกค่า — ฟันธงตัวเลขบนป้าย เป็นเจ้าของค่า'},
+    legacy:{t:'Legacy Pipeline (removed)',p:['Old path: voter + CooldownManager printing "[CONFIRMED]" (console, no audio). REMOVED at the cutover on 2026-06-17.'],w:['Episode identity was tied to the unstable YOLO sub-class → flicker became a false value-change.'],y:['Superseded by L1–L4, which became the authority at cutover; L3 now owns anti-spam.'],th:'ไปป์ไลน์เดิม — ถูกถอดออกตอน cutover 06-17; L1–L4 เป็นตัวตัดสินแทน'},
+    l1:{t:'L1 SignEpisodeLifecycle',p:['Tracks one sighting episode: ARMED → CONFIRMED → RELEASING → re-arm.','fresh=TRUE only on Armed→Confirmed (a NEW sighting after a gap).'],w:['Cannot tell a continuous sign from a re-encounter → spurious repeats or missed reminders.'],y:['VALUE-BLIND. reset() must NEVER be wired to presence loss (would break L2 no-forget). rearm_after default 600 ms.'],th:'วงจรชีวิตการเห็นป้าย — แยกเห็นต่อเนื่องกับเห็นใหม่ (fresh)'},
+    l2:{t:'L2 CurrentSpeedLimitManager',p:['Holds the persistent BELIEF of the speed limit (UNKNOWN/ACTIVE).','Acquire commits immediately; a DIFFERENT value needs K confirms; same value refreshes & clears pending.'],w:['A momentary occlusion or one bad CLS frame would wipe/flip the limit.'],y:['NO-FORGET: presence loss never changes the value. K-hysteresis rejects unstable CLS flips. age() is telemetry only.'],th:'ความเชื่อค่าจำกัดความเร็ว — no-forget + K-hysteresis กันค่าสั่น'},
+    l3:{t:'L3 AnnouncementPolicy',p:['Decides what to SAY: CHANGE (always), REMINDER (fresh re-encounter, gated by cooldown), or SUPPRESS.'],w:['Either constant nagging or missing real changes.'],y:['Anti-spam lives HERE, not in perception. CHANGE bypasses but resets the cooldown; REMINDER also resets it. Default 180 s.'],th:'นโยบายประกาศ — ตัดสินว่าจะพูด CHANGE/REMINDER หรือเงียบ'},
+    l4:{t:'L4 NotificationManager',p:['Maps (action,value) → wav and plays on a dedicated audio thread. Single slot, latest-wins; play outside the lock.'],w:['Synchronous play blocks perception; a FIFO queue plays STALE state.'],y:['Latest-wins: a burst collapses to first+last; the speaker never lies. aplay via posix_spawn — preemptible (kill-aplay) so safety can interrupt.'],th:'ตัวจัดการเสียง — เล่น wav เธรดแยก เก็บค่าล่าสุด ไม่บล็อกการมองเห็น; ตัดกลางคันได้ (kill-aplay)'},
+    speaker:{t:'Speaker',p:['MAX98357A I2S amp + 3 W speaker. Speaks the Thai voice clip.'],w:['No audible notification.'],y:['Final non-authoritative output of the SHADOW path (--shadow --audio). Legacy console authority untouched.'],th:'ลำโพง — เอาต์พุตเสียงจริงของฝั่ง shadow'},
+  };
+  const why=document.createElement('div'); why.id='simWhy';
+  why.style.cssText='position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(3,6,10,.72)';
+  why.innerHTML=`<div id="simWhyCard" style="background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:14px;max-width:560px;width:92%;padding:20px;font-family:Inter,system-ui,sans-serif"></div>`;
+  document.body.appendChild(why);
+  why.addEventListener('click',e=>{ if(e.target===why) why.style.display='none'; });
+  function openWhy(id){ const d=WHY[id]; if(!d)return;
+    const sec=(t,arr,c)=>arr?`<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;letter-spacing:.4px;color:${c};margin-bottom:4px">${t}</div>`+
+      arr.map(l=>`<div style="font-size:12.5px;color:#cbd5e1;line-height:1.6">• ${esc(l)}</div>`).join('')+`</div>`:'';
+    why.querySelector('#simWhyCard').innerHTML=
+      `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+         <h2 style="margin:0;font-size:16px;color:var(--accent)">${esc(d.t)}</h2>
+         <button class="simbtn" id="simWhyX">✕</button></div>`+
+      sec('PURPOSE',d.p,'#86efac')+sec('WITHOUT THIS BLOCK',d.w,'#fca5a5')+sec('WHY IT IS DESIGNED THIS WAY',d.y,'#93c5fd')+
+      `<div style="margin-top:6px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;color:#fcd9a8">🇹🇭 ${esc(d.th)}</div>`;
+    why.querySelector('#simWhyX').onclick=()=>why.style.display='none';
+    why.style.display='flex';
+  }
+  // node click → popup (movement-guarded so panning/selecting still works)
+  (function(){ const svg=DOMB['b10'].svg; let dx=0,dy=0,moved=false;
+    svg.addEventListener('pointerdown',e=>{dx=e.clientX;dy=e.clientY;moved=false;});
+    svg.addEventListener('pointermove',e=>{ if(Math.abs(e.clientX-dx)+Math.abs(e.clientY-dy)>6) moved=true; });
+    svg.addEventListener('click',e=>{ if(moved)return; const g=e.target.closest&&e.target.closest('.node'); if(g) openWhy(g.dataset.id); });
+  })();
+
+  // show/hide HUD + lazy init when Board 10 is opened
+  window.__simOnShow=function(id){
+    if(id==='b10'){ hud.style.display='block'; if(!simInit){ simInit=true; simReset(); } else simRender(); }
+    else { hud.style.display='none'; simStop(); }
+  };
+})();
+
+// start
+showBoard('b0');
+</script>
+</body>
+</html>
