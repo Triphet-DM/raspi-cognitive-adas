@@ -11,9 +11,6 @@ test/
 # Build artifacts
 *.exe
 
-# Demo capture media — raw Pi run video/photos kept local; presentation uses converted
-# docs/demo.gif + docs/hardware.jpg instead (keeps large binaries out of .git)
-demo/*.mp4
-demo/*.jpg
-demo/*.jpeg
-demo/*.png
+# demo/ = local working folder for raw captures (video + screenshots) — kept out of git.
+# Curated presentation assets are committed under docs/ instead (docs/demo.jpg, hardware.jpg, demo.gif).
+demo/*

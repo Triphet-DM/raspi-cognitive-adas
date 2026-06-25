@@ -4,13 +4,20 @@
 > Overwritten whenever a major architectural decision changes.
 > Detailed history lives in the dated session reports in `debug_reports/`.
 
-**Last updated:** 2026-06-25 (status reconciled with git; presentation day 06-24 journaled)
+**Last updated:** 2026-06-25 (EOD — benchmark capture + README case-study redesign)
 **Branch:** `fix-gil`
-**HEAD:** `f7a7cee docs(eod): 2026-06-20 session report + PROJECT_STATUS update`
-**Remote:** **in sync with `origin/fix-gil` — all refactor-#3 work committed AND pushed.**
-Re-delivery (CHANGE-only) committed `f4f5166` (the 8 files 06-20 had listed as "uncommitted").
-Models/audio/demo-media untracked + kept local. *(The 06-20 docs were written pre-commit and
-left stale "uncommitted/3-ahead" text — corrected here; see `2026-06-24_session_report.md`.)*
+**HEAD:** `f53b573 docs(eod): 2026-06-20 session report + PROJECT_STATUS update` (committed work in
+sync with `origin/fix-gil`).
+**Remote:** committed work in sync. **Uncommitted (06-25):** `README.md` (full redesign),
+`docs/demo.jpg`, `.gitignore` (demo/* ignored), `demo/log.txt` untracked. Models/audio/raw-demo
+kept local. *(Re-delivery committed `f4f5166` + pushed back on 06-20; the 06-20 docs were stale
+pre-commit text, reconciled 06-25.)*
+**PRESENTATION (06-24→06-25):** README rebuilt as an **Embedded AI Systems Engineering case study**
+(16 sections; architecture/behaviour = identity high, benchmarking/backend/low-precision = star).
+Full benchmark suite captured + **post-export consistency proven** (best.pt vs NCNN export, same
+test split @ conf0.45 → **Δ ≤0.3%**). Detail: `2026-06-25_session_report.md`. **Operating point:
+~18 FPS · 47.8 ms · NCNN fp32 + fp16 storage/packed (NOT fp16 arithmetic) · threads=2 · imgsz 512.**
+int8 + fp16-arithmetic ruled out on CPU (slower / no-gain). Dataset = **13,039** labeled imgs / **15 classes**.
 **Direction:** **Cognitive Driver Assistance** — non-speed behavior **architecture FROZEN
 2026-06-15** (see next section).
 **SPEED CUTOVER DONE + Pi-verified 2026-06-17:** L1–L4 is now the speed authority; legacy
@@ -395,14 +402,23 @@ A4 housekeeping = delete orphaned `SpeedSignLifecycle`.)
    School Zone 0.972 @conf0.45 → suppression at one tier level). **Bench-tune** `MomentaryPolicy`
    numbers + reminder/suppression cooldowns (test placeholders Safety 5s/Warning 15s/Restriction
    30s → user sets production; provisional values OK now).
-4. **Presentation:** README §6–10 + GitHub ops (rename → `raspi-cognitive-adas`, Pages, `docs/`).
+4. **Presentation:** README **fully redesigned 06-25** as an **evolution story** (16 sections;
+   §2 Timeline = real **v1.1→v1.7** early phase + **v2.2** redesign, NOT a separate project).
+   `README_assets/` (7 imgs incl. real detection screenshots sign_90/school_zone/…) **imported from
+   `origin/main`**; docs/ new-era charts (architecture/class_dist/training_curves); dataset = 13,039.
+   **PUBLISH STRATEGY (decide):** new README lives on `fix-gil`; `origin/main` still has the OLD
+   README + version_1.1–1.7 folders. Must integrate so the new README + v2.2 land on `main` while
+   **keeping** v1.x folders + README_assets (do NOT overwrite history). Pending: author final read +
+   **commit**; **demo video WITH AUDIO** (upload `demo/Video.mp4` via GitHub web/Release — NOT a
+   gif); GitHub ops (rename → `raspi-cognitive-adas`, default `main`, Pages, folder-flatten).
 
 ---
 
 ## Resume Point For Next Session
 
-- **Read:** this file, then `2026-06-24_session_report.md` (presentation + safety precision), then
-  `2026-06-17_session_report.md` (cutover + Brain 2 bring-up), then
+- **Read:** this file, then `2026-06-25_session_report.md` (benchmarks + README case-study +
+  export-consistency A/B), then `2026-06-24_session_report.md` (presentation + safety precision),
+  then `2026-06-17_session_report.md` (cutover + Brain 2 bring-up), then
   `2026-06-15_session_report.md` (Brain 2 architecture FROZEN), then
   `2026-06-14_session_report.md` (behavior laws + Q1–Q8). Older: `FP32_SPEED_ENVELOPE.md` /
   `INT8_AB_RESULTS.md` (06-16 speed perf), `2026-06-10_session_report.md` (speed L1–L4 detail).
