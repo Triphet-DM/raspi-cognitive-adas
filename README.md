@@ -25,9 +25,9 @@
 *Live on-device detection (speed-limit 90) with the runtime telemetry panel + decision log, on the Raspberry Pi 5.*
 
 🎥 **Demo (with audio):** the system's whole point is that it **speaks** — so the live demo is a **video with sound**, not a silent GIF.
-<!-- TODO: on github.com, edit this README and DRAG demo/Video.mp4 into the editor (or attach it
-     to a Release). GitHub hosts it and renders an inline player WITH audio — paste the resulting
-     https://github.com/<user>/<repo>/assets/... URL on the line above. (Do NOT use a GIF: no sound.) -->
+
+## Demo (with audio)
+https://github.com/user-attachments/assets/ae2531b6-3ab8-476e-abaf-a1c68d431d60
 
 **More on-device detections:**
 
