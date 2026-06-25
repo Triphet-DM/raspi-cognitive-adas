@@ -276,7 +276,7 @@ Plus: embedded-Python (Picamera2) GIL management, NCNN thread benchmarking, and 
 | Speaker | 3 W |
 | Cooling | Official Active Cooling Fan |
 
-![Hardware close-up — Raspberry Pi 5, IMX477 HQ camera, 16 mm telephoto lens](README_assets/hardware_closeup%281%29.png)
+![Hardware — Raspberry Pi 5, IMX477 HQ camera + 16 mm telephoto lens, MAX98357A amp + speaker](docs/hardware.jpg)
 
 *Power delivery (automotive supply / DC-DC) is not finalized and is intentionally left unspecified. A secondary driver-monitoring camera is planned (§14).*
 <!-- TODO: optional I²S wiring/pinout note. -->
