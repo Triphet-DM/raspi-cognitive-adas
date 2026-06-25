@@ -410,10 +410,12 @@ A4 housekeeping = delete orphaned `SpeedSignLifecycle`.)
    **Internal kept OFF main** (live on `fix-gil` only): PROJECT_STATUS, session/EOD reports,
    architecture_issues, claude_engineering_growth_skill. **Safety:** `backup-main-before-v2` pushed;
    v1.1–1.7 history intact; merged `.gitignore` drops global `*.png/*.jpg` so presentation imgs track
-   (models/audio/demo stay local). **STILL PENDING:** verify GitHub render/images; **demo video WITH
-   AUDIO** (upload `demo/Video.mp4` via GitHub web/Release — NOT a gif); optional `evo_*` shots;
-   **rename repo → `raspi-cognitive-adas` DEFERRED** (deliberately not same day as publish); enable
-   Pages. *(`fix-gil` .gitignore still the older dev version — optional to sync to main's merged one.)*
+   (models/audio/demo stay local). **✅ ALL LIVE:** repo **renamed → `raspi-cognitive-adas`** (local
+   remote updated); **demo video WITH AUDIO** uploaded via GitHub web (main `fed5e0c`/`142bdf0`);
+   **GitHub Pages ON** → viewer live `https://triphet-dm.github.io/raspi-cognitive-adas/ARCHITECTURE_VIEWER.html`;
+   `.gitignore` synced on `fix-gil`. **Branch model:** `main` = public home (Pages serves it, public
+   edits go here) · `fix-gil` = dev. **Optional polish only:** `evo_*` Timeline shots; DC-DC power §13;
+   remove the stale `<!-- enable Pages -->` comment in README §5.
 
 ---
 

@@ -193,31 +193,59 @@ offset rollback; file now identical to committed (no diff).
 
 ---
 
-## Current Working-Tree Status
-**Branch `fix-gil`, in sync with `origin/fix-gil` for committed work.** Uncommitted (this session):
-- `README.md` — **rewritten** (16-section embedded-systems-engineering case study).
-- `docs/demo.jpg` — curated detection still (new).
-- `.gitignore` — `demo/*` now fully ignored (demo = local working folder).
-- `demo/log.txt` — **untracked** (was committed; staged deletion).
-- `ARCHITECTURE_VIEWER.html` — no diff (offset experiment fully rolled back).
-- Memory updated: `raspi-github-presentation-parked`, `raspi-safety-precision-measured`.
+## Deployment / Publish to GitHub (the big event of the day) — ✅ DONE & LIVE
 
-Earlier this session already committed + pushed: `2026-06-24_session_report.md` + the
-PROJECT_STATUS reconciliation + viewer restyle (commits `b3759bb`, `f53b573`).
+- **Topology discovery:** `fix-gil` (dev) and `origin/main` (public: old README + `version_1.1–1.7` +
+  `README_assets/`) are **UNRELATED histories** (`git merge-base` empty). Plain `git merge` would fail;
+  `--allow-unrelated-histories` would conflict on README/.gitignore. **Chosen: selective bring-over.**
+- **Backup first:** `git branch backup-main-before-v2 origin/main && git push origin backup-main-before-v2`
+  → snapshot of pre-v2 public main (`d053242`). Restore if needed: `git push origin backup-main-before-v2:main --force`.
+- **v2.2 flattened + renamed:** `version_2.2_cls_roi_debug/raspi_project_v11/` → top-level
+  `version_2.2_cognitive_architecture/` (src/ directly inside, matching the `version_1.x_*` convention).
+  README build path + Timeline links updated; 54 git renames (history preserved).
+- **Selective bring-over** (`git checkout -b main origin/main; git checkout fix-gil -- <public paths>`):
+  - **Public (commit `7026136`, pushed):** README.md, docs/, version_2.2_cognitive_architecture/,
+    ARCHITECTURE_VIEWER.html, merged .gitignore, README_assets/ (identical), + **3 benchmark docs on
+    purpose:** INT8_AB_RESULTS.md, FP32_SPEED_ENVELOPE.md, ARCHITECTURE.md (engineering evidence).
+  - **Internal (on `fix-gil` only, NOT on main):** PROJECT_STATUS.md, session/EOD reports,
+    architecture_issues_v2.2.txt, claude_engineering_growth_skill/.
+- **Merged `.gitignore`:** dropped main's global `*.png`/`*.jpg` (would have blocked presentation imgs)
+  while keeping build/model/audio/demo ignores. Synced to `fix-gil` too.
+- **Repo renamed** `traffic-sign-edge-ai` → **`raspi-cognitive-adas`** (user, GitHub UI); local remote
+  updated. **Demo video WITH AUDIO** uploaded by user via GitHub web (main → `fed5e0c`, `142bdf0`).
+  **GitHub Pages enabled** → viewer **LIVE**: `https://triphet-dm.github.io/raspi-cognitive-adas/ARCHITECTURE_VIEWER.html`.
+
+### Branch model going forward (IMPORTANT for next session)
+- **`main` = public home** (GitHub Pages serves it). Public edits (README, ARCHITECTURE_VIEWER.html,
+  docs/) → commit + push to `main` → Pages auto-rebuilds (~1 min). Can also edit on github.com web.
+- **`fix-gil` = dev branch** (v2.2 code + internal docs). The two branches are unrelated histories —
+  **treat `main` as canonical for public files** to avoid divergence (README + viewer exist on both).
+- **Safety nets on origin:** `backup-main-before-v2` (old main), `fix-gil` (full dev history).
+
+---
+
+## Current Working-Tree Status
+**Everything committed + pushed — nothing uncommitted (EOD verified).**
+- **`fix-gil`** (dev): clean, in sync with `origin/fix-gil`. Last commits: `be17d3b` README redesign ·
+  `d35a3e2` flatten/rename v2.2 · `5aaaf08` record publish · `ed89633` sync .gitignore.
+- **`main`** (public): `7026136` v2.2+README bring-over, then user web edits `fed5e0c`, `142bdf0`
+  (demo video). Live on GitHub Pages.
+- **`backup-main-before-v2`** on origin → `d053242` (pre-v2 main snapshot).
+- Memory updated: `raspi-github-presentation-parked`, `raspi-safety-precision-measured`.
+- **No untracked files outside `.gitignore`.** models/audio/`demo/`/`*.exe` intentionally local.
 
 ---
 
 ## Resume Point For Next Session
 
-- **Finished:** doc reconciliation to git truth; 06-24 + 06-25 reports; full benchmark capture;
-  export-isolation A/B (post-export consistency proven, Δ≤0.3%); README full redesign
-  (case-study); docs/ vs demo/ split; fp16/int8 questions closed; class count = 15 confirmed.
-- **In progress / next:** (1) author does a **final manual read of `README.md`**, then **commit**
-  the uncommitted set above (+ consider push). (2) Fill **Design Evolution Timeline** milestones +
-  add old screenshots to `docs/`. (3) Embed the **demo video WITH AUDIO** (upload `demo/Video.mp4`
-  via GitHub web/Release → inline player; NOT a gif — the system speaks). (4) GitHub ops: rename
-  repo → `raspi-cognitive-adas`, default branch `main`, enable
-  Pages, then the viewer link in README §5 goes live. (5) Folder-flatten the tree (mind CMake paths).
+- **Finished:** doc reconciliation; 06-24 + 06-25 reports; full benchmark capture; export-isolation
+  A/B (Δ≤0.3%); README case-study redesign; **PUBLISHED to public `main` + renamed to
+  `raspi-cognitive-adas` + demo video (audio) + GitHub Pages LIVE** (see Deployment section);
+  fp16/int8 closed; class count = 15; dataset = 13,039.
+- **Optional polish remaining (NOT blockers — repo is complete & live):** (1) `evo_*` old
+  screenshots for §2 Timeline. (2) DC-DC power spec §13 (intentionally blank). (3) viewer connector
+  spacing (rolled back; parked). (4) clean the `<!-- TODO: enable GitHub Pages -->` comment in
+  README §5 (Pages now on) — public-file edits go on `main` now.
 - **Then (decision side, unchanged):** set production `MomentaryPolicy`/reminder/suppression
   numbers (precision measured → provisional OK); on-Pi soak; re-delivery 60→80 all-angle tick;
   K=1 vs K=2; A4 delete orphaned `SpeedSignLifecycle`.
