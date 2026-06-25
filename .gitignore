@@ -10,3 +10,10 @@ test/
 
 # Build artifacts
 *.exe
+
+# Demo capture media — raw Pi run video/photos kept local; presentation uses converted
+# docs/demo.gif + docs/hardware.jpg instead (keeps large binaries out of .git)
+demo/*.mp4
+demo/*.jpg
+demo/*.jpeg
+demo/*.png

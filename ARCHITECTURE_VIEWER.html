@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="light">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,14 +10,14 @@
     --ink:#e9ecef; --ink2:#aab0b8; --accent:#9775fa;
   }
   html.light{
-    --bg:#f4f4f2; --panel:#ffffff; --panel2:#ececed; --line:#d6d6d6;
+    --bg:#ffffff; --panel:#ffffff; --panel2:#f1f3f5; --line:#dee2e6;
     --ink:#1d1d20; --ink2:#5a5f66; --accent:#7048e8;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
     font-family:'Inter',system-ui,'Segoe UI',Roboto,sans-serif;overflow:hidden}
-  /* hand-drawn font only inside diagrams */
-  .scene text{font-family:'Comic Sans MS','Segoe Print','Bradley Hand','Comic Sans',cursive;}
+  /* clean sans inside diagrams (standard, legible) */
+  .scene text{font-family:'Inter',system-ui,'Segoe UI',Roboto,Arial,sans-serif;}
 
   #app{display:flex;height:100%}
 
@@ -173,21 +173,22 @@
    Excalidraw-style scene builder (SVG strings)
    ============================================================ */
 const CAT = {
-  perc:  {s:'#4dabf7', f:'#13263b'},
-  data:  {s:'#ffe066', f:'#332f12'},
-  dec:   {s:'#b197fc', f:'#221a3a'},
-  audio: {s:'#69db7c', f:'#0f2c1d'},
-  legacy:{s:'#ffc078', f:'#3a2912'},
-  shadow:{s:'#f783ac', f:'#3a1c2b'},
-  infra: {s:'#adb5bd', f:'#26262b'},
-  note:  {s:'#6b7077', f:'#202024'},
+  // saturated fill + strong stroke/title — vivid yet readable on white
+  perc:  {s:'#1565a8', f:'#cfe3f7'},   // perception — blue
+  data:  {s:'#9a6f00', f:'#fceeb0'},   // data — amber
+  dec:   {s:'#5b34c9', f:'#ddd2f7'},   // decision — purple
+  audio: {s:'#268a3a', f:'#cdebd6'},   // audio — green
+  legacy:{s:'#d24e08', f:'#fad8bf'},   // legacy — orange
+  shadow:{s:'#b01e51', f:'#facfe0'},   // Brain 2 / momentary — magenta
+  infra: {s:'#495057', f:'#dfe3e8'},   // infra — gray
+  note:  {s:'#727a82', f:'#eceff2'},   // note — muted
   // live-sim state colors (Board 10): gray=idle yellow=processing green=ok red=rejected blue=waiting
-  s_idle:{s:'#475569', f:'#1b232e'},
-  s_proc:{s:'#eab308', f:'#3a2f0b'},
-  s_ok:  {s:'#22c55e', f:'#0f2c1d'},
-  s_rej: {s:'#ef4444', f:'#3a1414'},
-  s_wait:{s:'#3b82f6', f:'#10233f'},
-  active:{s:'#fde047', f:'#3a2f0b'},
+  s_idle:{s:'#566377', f:'#dde3ea'},
+  s_proc:{s:'#a06f04', f:'#fbeec0'},
+  s_ok:  {s:'#268a3a', f:'#cdebd6'},
+  s_rej: {s:'#c92a2a', f:'#fad2d2'},
+  s_wait:{s:'#1565a8', f:'#cfe3f7'},
+  active:{s:'#d97e00', f:'#ffe9c2'},
 };
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
@@ -250,7 +251,7 @@ function nodeInner(n,pfx){
     const ty  = top + TS;
     s+=`<text x="${w/2}" y="${ty}" text-anchor="middle" font-size="${TS}" font-weight="bold" fill="${c.s}">${esc(n.title)}</text>`;
     lines.forEach((ln,i)=>{
-      s+=`<text x="${w/2}" y="${ty + GAP + LH*(i+1) - 3}" text-anchor="middle" font-size="${BS}" fill="#c9ced3">${esc(ln)}</text>`;
+      s+=`<text x="${w/2}" y="${ty + GAP + LH*(i+1) - 3}" text-anchor="middle" font-size="${BS}" fill="#343a40">${esc(ln)}</text>`;
     });
   } else {
     s+=`<text x="${w/2}" y="${h/2 + TS/2 - 1}" text-anchor="middle" font-size="${TS}" font-weight="bold" fill="${c.s}">${esc(n.title)}</text>`;
@@ -319,7 +320,7 @@ function note(nt){
         stroke="#6b7077" stroke-width="1.5" stroke-dasharray="4 7"/>
       <rect x="${x+w/2-nt.label.length*3.8-12}" y="${y-12}" width="${nt.label.length*7.6+24}" height="24" rx="12"
         style="fill:var(--panel)" stroke="#6b7077"/>
-      <text x="${x+w/2}" y="${y+5}" text-anchor="middle" font-size="12.5" fill="#aab0b8"
+      <text x="${x+w/2}" y="${y+5}" text-anchor="middle" font-size="12.5" fill="#5a6068"
         style="font-family:Inter,sans-serif">${esc(nt.label)}</text></g>`;
   }
   const c=CAT[nt.cls||'note'];
@@ -330,7 +331,7 @@ function note(nt){
       fill="${c.f}" stroke="${c.s}" stroke-width="1.6" opacity="0.97"/>`;
   let yy=y+22;
   if(nt.title){ s+=`<text x="${x+14}" y="${yy}" font-size="14" font-weight="bold" fill="${c.s}">${esc(nt.title)}</text>`; yy+=24; }
-  lines.forEach(ln=>{ s+=`<text x="${x+14}" y="${yy}" font-size="13" fill="#c9ced3">${esc(ln)}</text>`; yy+=19; });
+  lines.forEach(ln=>{ s+=`<text x="${x+14}" y="${yy}" font-size="13" fill="#343a40">${esc(ln)}</text>`; yy+=19; });
   return s+`</g>`;
 }
 // one arrowhead marker per edge colour, namespaced per board (ids must be unique across svgs)
@@ -343,7 +344,7 @@ function defs(pfx){
   return `<defs>
     <filter id="rough_${pfx}" x="-12%" y="-12%" width="124%" height="124%">
       <feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="11" result="n"/>
-      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6" xChannelSelector="R" yChannelSelector="G"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G"/>
     </filter>
     ${markers}
   </defs>`;
@@ -374,12 +375,12 @@ BOARDS.push({
   fitDefault:true,
   W:4320, H:2360,
   regions:[
-    {x:40,y:160,w:4240,h:330,cls:'perc',  label:'CAMERA THREAD — only when --async-camera (else capture runs on main)'},
-    {x:40,y:500,w:4240,h:360,cls:'perc',  label:'DETECTION THREAD — only when --async-detect (else YOLO runs on main)'},
+    {x:40,y:160,w:4240,h:330,cls:'perc',  label:'CAMERA THREAD — only with --async-camera (ruled out; SYNC is default)'},
+    {x:40,y:500,w:4240,h:360,cls:'perc',  label:'DETECTION THREAD — only with --async-detect (ruled out; SYNC is default)'},
     {x:40,y:870,w:4240,h:1060,cls:'dec',  label:'MAIN THREAD (always) — owns nearly everything · run_decision + render + L1–L4 producer'},
     {x:40,y:1950,w:4240,h:330,cls:'audio',label:'AUDIO THREAD — only when --audio'},
-    {x:2270,y:1100,w:380,h:210,cls:'legacy',label:'LEGACY AUTHORITY'},
-    {x:2700,y:870,w:1430,h:440,cls:'shadow',label:'SHADOW AUTHORITY → SPEAKER'},
+    {x:2270,y:1100,w:380,h:210,cls:'legacy',label:'LEGACY PATH — REMOVED at cutover 06-17'},
+    {x:2700,y:870,w:1430,h:440,cls:'shadow',label:'DECISION AUTHORITY (L1–L4) → SPEAKER'},
   ],
   nodes:{
     camera:{x:120,y:230,w:300,h:130,cls:'perc',title:'Picamera2Camera',lines:['read(): embedded CPython','RGB888 → BGR (cvtColor)','GIL Ensure/Release']},
@@ -397,11 +398,11 @@ BOARDS.push({
     cliflags:{x:120,y:1400,w:320,h:170,cls:'note',title:'CLI flags',lines:['--shadow / --audio','--async-camera / --async-detect','--shadow-k / -rearm / -reminder','--cls-* · --save-roi-debug','--show-window / --no-draw']},
 
     voter:{x:1560,y:880,w:300,h:130,cls:'perc',title:'TemporalVoter',lines:['deque(10) · confirm 4/10','suppressed → empty vote']},
-    cooldown:{x:1560,y:1050,w:300,h:130,cls:'legacy',title:'CooldownManager',lines:['per-class 5s window','is_suppressed / activate']},
+    cooldown:{x:1560,y:1050,w:300,h:130,cls:'legacy',title:'CooldownManager ❌ REMOVED',lines:['removed at cutover 06-17','anti-spam moved to L3']},
     roi:{x:1920,y:880,w:300,h:130,cls:'perc',title:'ROI pipeline',lines:['roi_by_class · BestROI','best crop per class']},
     classifier:{x:1920,y:1050,w:300,h:140,cls:'perc',title:'SpeedSignClassifier',lines:['Confirm-then-Classify','VALUE authority','owned by YoloDetector']},
     confirmed:{x:2300,y:945,w:280,h:110,cls:'data',title:'confirmed_value',lines:['CLS-corrected class']},
-    legacy:{x:2300,y:1130,w:330,h:140,cls:'legacy',title:'LEGACY PATH',lines:['cooldown.activate(value)','print "[CONFIRMED] >>>"','console only — NO audio']},
+    legacy:{x:2300,y:1130,w:330,h:140,cls:'legacy',title:'LEGACY PATH ❌ REMOVED',lines:['removed at cutover 06-17','L1–L4 is now the authority','(was: console "[CONFIRMED]")']},
 
     gate:{x:2740,y:900,w:270,h:80,cls:'shadow',title:'is_speed() gate'},
     facade:{x:2740,y:1010,w:300,h:120,cls:'shadow',title:'ShadowSpeedLimitPipeline',lines:['facade · tick() each frame','no locks (main only)']},
@@ -417,7 +418,7 @@ BOARDS.push({
     framesave:{x:1320,y:1480,w:330,h:140,cls:'infra',title:'Frame saving',lines:['--save-frames','hit/miss buckets']},
     render:{x:1700,y:1480,w:330,h:140,cls:'infra',title:'Rendering / UI',lines:['draw overlay · imshow','--show-window / --no-draw']},
 
-    out_console:{x:2300,y:1480,w:300,h:110,cls:'note',title:'OUTPUT — console',lines:['[CONFIRMED] · [SHADOW][L3]']},
+    out_console:{x:2300,y:1480,w:300,h:110,cls:'note',title:'OUTPUT — console',lines:['[SHADOW][L3] (authority)']},
     out_window:{x:2300,y:1620,w:300,h:100,cls:'note',title:'OUTPUT — window',lines:['OpenCV imshow overlay']},
     out_frames:{x:2300,y:1740,w:300,h:100,cls:'note',title:'OUTPUT — saved frames',lines:['pi_debug_frames/ · ROI crops']},
 
@@ -467,38 +468,38 @@ BOARDS.push({
     {x:1560,y:55,w:1100,cls:'data',title:'③ CLASSIFY · VOTE · CONFIRM'},
     {x:2740,y:55,w:1000,cls:'data',title:'④ BELIEF · ANNOUNCE'},
     {x:3820,y:55,w:400,cls:'data',title:'⑤ PLAY'},
-    {x:2100,y:195,w:1000,cls:'note',title:'OWNERSHIP — created/owned by main()',lines:['CameraThread · AsyncDetectionWorker · YoloDetector','SpeedSignClassifier (held by YoloDetector)','TemporalVoter · CooldownManager · roi_by_class','ShadowSpeedLimitPipeline → L1·L2·L3·L4 + NotificationManager','AppConfig']},
+    {x:2100,y:195,w:1000,cls:'note',title:'OWNERSHIP — created/owned by main()',lines:['CameraThread · AsyncDetectionWorker · YoloDetector','SpeedSignClassifier (held by YoloDetector)','TemporalVoter · roi_by_class  (CooldownManager removed)','ShadowSpeedLimitPipeline → L1·L2·L3·L4','MomentaryEngine · BehaviorPolicyRouter · NotificationArbiter','NotificationManager · AppConfig']},
     {x:3180,y:195,w:1040,cls:'note',title:'SYNCHRONIZATION (1 producer → 1 consumer)',lines:['camera→main: frame CLONE (per-slot mutex + atomic idx)','main↔worker: pending/result buffer (1 mutex + 1 condvar)','main→audio: filename slot (mutex + condvar)','ALL latest-wins · L1–L4 lock-free (main only)']},
     {x:1920,y:530,w:740,cls:'note',title:'LIFECYCLE (left → right)',lines:['capture → detect → classify → vote','→ confirm → belief → announce → play']},
-    {x:2760,y:530,w:1100,cls:'note',title:'AUTHORITY',lines:['LEGACY = voter + cooldown → "[CONFIRMED]" (console only)','SHADOW = L1–L4 → drives the SPEAKER (--shadow)','audio = shadow decisions; legacy path untouched']},
+    {x:2760,y:530,w:1100,cls:'note',title:'AUTHORITY',lines:['L1–L4 is the speed AUTHORITY (cutover 06-17)','legacy voter+cooldown "[CONFIRMED]" path REMOVED','+ Brain 2 (momentary) + Notification Arbiter — see Board 1']},
   ],
 });
 
 /* ---------- BOARD 1 — SYSTEM OVERVIEW ---------- */
 BOARDS.push({
   id:'b1', group:'Overview', name:'1 · System Overview', icon:'#4dabf7',
-  title:'Board 1 — System Overview (designed target · FROZEN 2026-06-15)', sub:'two-brain → BehaviorPolicyRouter → Notification Arbiter → shared L4 · sync main thread · read at 100%, pan left→right',
-  W:3260, H:760,
+  title:'Board 1 — Cognitive Driver Assistance Architecture', sub:'two decision engines → BehaviorPolicyRouter → Notification Arbiter → shared L4 · sync main thread · read at 100%, pan left→right',
+  W:3260, H:930,
   regions:[
     {x:10,y:120,w:1530,h:340,label:'MAIN THREAD (sync) — perception · single decision thread · NO locks', cls:'infra'},
-    {x:1560,y:90,w:1120,h:260,label:'BRAIN 1 — PersistentState · speed · L1→L2→L3 → shared L4 · DONE', cls:'dec'},
-    {x:1560,y:410,w:1120,h:270,label:'BRAIN 2 — Momentary · 10 non-speed signs · per-class timestamp · TO-BUILD', cls:'shadow'},
+    {x:1560,y:90,w:1120,h:260,label:'DECISION ENGINE A — Persistent-State (speed limit) · L1→L2→L3 → shared L4', cls:'dec'},
+    {x:1560,y:410,w:1120,h:270,label:'DECISION ENGINE B — Momentary events (10 non-speed signs) · per-class suppression', cls:'shadow'},
     {x:2700,y:100,w:420,h:600,label:'ARBITER → shared L4 → AUDIO THREAD', cls:'audio'},
   ],
   nodes:{
     io_in:{x:40,y:50,w:300,h:60,cls:'note',title:'INPUT — road scene'},
     cam:{x:40,y:160,w:280,h:120,cls:'perc',title:'Camera (sync)',lines:['Picamera2.read() on main','RGB888 → BGR','no async (halves FPS)']},
-    yolo:{x:340,y:160,w:280,h:120,cls:'perc',title:'YOLO Detector',lines:['letterbox→ncnn→NMS','presence + ROI box','conf≥0.25 · IoU 0.45']},
+    yolo:{x:340,y:160,w:280,h:120,cls:'perc',title:'YOLO Detector · Stage 1',lines:['detects sign REGION only','presence + ROI box (NOT value)','letterbox→ncnn→NMS']},
     det:{x:650,y:178,w:200,h:84,cls:'data',title:'Detection[]',lines:['{box,class,conf}']},
     voter:{x:880,y:160,w:300,h:120,cls:'perc',title:'TemporalVoter',lines:['Detection Stability','= K/N FRAMES (count)','confirm → fire once']},
-    cls:{x:880,y:315,w:300,h:110,cls:'perc',title:'CLS — VALUE authority',lines:['confirm-then-classify','speed value (50/60/…)','feeds Brain 1 only']},
+    cls:{x:880,y:315,w:300,h:110,cls:'perc',title:'Speed Classifier · Stage 2',lines:['reads speed VALUE from ROI','confirm-then-classify (50/60/…)','feeds Engine A only']},
     router:{x:1230,y:160,w:300,h:120,cls:'dec',title:'BehaviorPolicyRouter',lines:['after confirm','which behavioural policy?','→ which brain']},
     l1:{x:1600,y:130,w:300,h:110,cls:'dec',title:'L1 SignEpisodeLifecycle',lines:['episode + fresh · re-arm']},
     l2:{x:1920,y:130,w:300,h:110,cls:'dec',title:'L2 CurrentSpeedLimitManager',lines:['belief · K-hyst · no-forget']},
     l3:{x:2240,y:130,w:300,h:110,cls:'dec',title:'L3 AnnouncementPolicy',lines:['CHANGE / REMINDER / SUPPRESS','Persistent Reminder = 180 s']},
     mom:{x:1600,y:455,w:470,h:175,cls:'dec',title:'Momentary Engine',lines:['NO episode lifecycle','now − last_notified[class] ≥ window ?','  NO  → SUPPRESS (silent)','  YES → emit Action · stamp = now']},
     mpol:{x:2110,y:455,w:430,h:175,cls:'shadow',title:'MomentaryPolicy (per class)',lines:['{ suppression_window (TIME),','  attention_rank }','class memory, not instance']},
-    arb:{x:2720,y:130,w:380,h:225,cls:'infra',title:'Notification Arbiter (stateful)',lines:['SELECT  : highest attention_rank','PREEMPT : rank>cur AND','          rank ≥ INTERRUPT_THRESHOLD','THRESHOLD = Safety Boundary','  (School Zone) ⇒ re-derives Law 2','preempt = kill playing aplay']},
+    arb:{x:2720,y:130,w:380,h:225,cls:'infra',title:'Notification Arbiter (stateful)',lines:['SELECT  : highest attention_rank','PREEMPT : rank>cur AND','          rank ≥ INTERRUPT_THRESHOLD','THRESHOLD = lowest safety rank','  (Ped Crossing) ⇒ re-derives Law 2','preempt = kill playing aplay']},
     l4:{x:2720,y:390,w:380,h:120,cls:'audio',title:'shared L4 (single-slot)',lines:['latest-wins','value→wav  /  class→wav']},
     spk:{x:2720,y:550,w:380,h:130,cls:'audio',title:'🔊 Speaker',lines:['aplay → MAX98357A','one voice at a time']},
   },
@@ -522,19 +523,22 @@ BOARDS.push({
   notes:[
     {x:30,y:495,w:360,cls:'note',title:'Two-Brain asymmetry (LOCKED 06-15)',lines:['Momentary = no 2nd chance → MAY INTERRUPT.','Persistent = re-derivable → waits for the mouth.','Both feed ONE channel: the driver\'s ear.']},
     {x:410,y:495,w:380,cls:'note',title:'Three temporal mechanisms (distinct!)',lines:['Detection Stability = K/N FRAMES (count)','Persistent Reminder = 180 s (speed only)','Notification Suppression = per-class seconds']},
-    {x:810,y:495,w:370,cls:'note',title:'Attention ranking (provisional #s)',lines:['Ped-Crossing 30 · Ped-Warning 25','School 20 = THRESHOLD','Speed CHANGE 12 · Curve 10 · Crossroad 8','Restrictions 4 · Speed REMINDER 2']},
-    {x:1200,y:495,w:330,cls:'note',title:'3 integration refactors TO-BUILD',lines:['1 · extract shared L4 from facade','2 · two wav maps (value→ / class→)','3 · kill-aplay preempt + interrupt-aware']},
+    {x:810,y:495,w:370,cls:'note',title:'Attention ranking (provisional #s · re-ranked 06-17)',lines:['School Zone 30 · Ped-Warning 25','Ped-Crossing 20 = THRESHOLD','Speed CHANGE 12 · Curve 10 · Crossroad 8','Restrictions 4 · Speed REMINDER 2']},
+    {x:1200,y:495,w:330,cls:'note',title:'3 integration refactors · DONE',lines:['1 · extract shared L4 from facade','2 · two wav maps (value→ / class→)','3 · kill-aplay preempt + re-delivery']},
+    {x:30,y:715,w:540,cls:'infra',title:'Engineering Challenges Solved',lines:['Embedded Python (Picamera2) + GIL management','NCNN thread benchmarking — threads=2 optimal','Async halved throughput → sync pipeline chosen','CPU-contention analysis · dropped-frame handling']},
+    {x:600,y:715,w:480,cls:'audio',title:'Performance Snapshot — Raspberry Pi 5 (8GB)',lines:['~18 FPS sustained · infer ~48 ms/frame','CPU ~50–60% · imgsz 512 · NCNN fp32','threads=2 · sync pipeline · packing on']},
+    {x:1110,y:715,w:420,cls:'perc',title:'Deployment — Fully On-Device',lines:['Raspberry Pi 5 · offline inference','NO cloud / NO network dependency','real-time execution at the edge']},
   ],
 });
 
 /* ---------- BOARD 2 — THREAD ARCHITECTURE ---------- */
 BOARDS.push({
   id:'b2', group:'Threads & Data', name:'2 · Thread Architecture', icon:'#adb5bd',
-  title:'Board 2 — Thread Architecture', sub:'4 threads · all decisions on main · 3× latest-wins hand-off',
+  title:'Board 2 — Thread Architecture', sub:'main owns all decisions · async camera/detect optional (SYNC is default) · latest-wins hand-off',
   W:1580, H:840,
   regions:[
-    {x:20,y:70,w:340,h:740,label:'CAMERA THREAD (--async-camera)', cls:'perc'},
-    {x:380,y:70,w:340,h:740,label:'DETECTION THREAD (--async-detect)', cls:'perc'},
+    {x:20,y:70,w:340,h:740,label:'CAMERA THREAD (--async-camera · optional)', cls:'perc'},
+    {x:380,y:70,w:340,h:740,label:'DETECTION THREAD (--async-detect · optional)', cls:'perc'},
     {x:740,y:70,w:430,h:740,label:'MAIN THREAD (always)', cls:'dec'},
     {x:1190,y:70,w:370,h:740,label:'AUDIO THREAD (--audio)', cls:'audio'},
   ],
@@ -550,17 +554,17 @@ BOARDS.push({
 
     m_loop:{x:770,y:110,w:370,h:56,cls:'infra',title:'main loop + run_decision()'},
     m_voter:{x:770,y:188,w:175,h:54,cls:'perc',title:'TemporalVoter'},
-    m_cool:{x:965,y:188,w:175,h:54,cls:'legacy',title:'CooldownManager'},
+    m_cool:{x:965,y:188,w:175,h:54,cls:'legacy',title:'CooldownManager ❌ removed'},
     m_roi:{x:770,y:262,w:175,h:54,cls:'perc',title:'roi_by_class'},
     m_cls:{x:965,y:262,w:175,h:54,cls:'perc',title:'classifier (call)'},
-    m_lc:{x:770,y:336,w:370,h:46,cls:'shadow',title:'[LC-SHADOW] old lifecycle (telemetry)'},
+    m_lc:{x:770,y:336,w:370,h:46,cls:'legacy',title:'[LC-SHADOW] old lifecycle — removed'},
     m_pipe:{x:770,y:400,w:370,h:120,cls:'shadow',title:'ShadowSpeedLimitPipeline (facade)',lines:['owns L1·L2·L3·L4','NO LOCKS — main thread only','tick() each frame']},
     m_cons:{x:770,y:548,w:175,h:52,cls:'data',title:'consumes: Detection[]'},
     m_prod:{x:965,y:548,w:175,h:52,cls:'data',title:'produces: notify()'},
 
     a_slot:{x:1230,y:110,w:290,h:74,cls:'infra',title:'pending_ filename slot',lines:['1 mutex + 1 condvar','latest-wins']},
     a_run:{x:1230,y:220,w:290,h:70,cls:'audio',title:'run() consumer loop',lines:['take latest → play','OUTSIDE the lock']},
-    a_play:{x:1230,y:326,w:290,h:74,cls:'audio',title:'play_blocking()',lines:['aplay -q -D plughw:0,0','blocks to clip end']},
+    a_play:{x:1230,y:326,w:290,h:74,cls:'audio',title:'aplay via posix_spawn',lines:['aplay -q -D plughw:0,0','preemptible (kill-aplay)']},
   },
   edges:[
     {from:'c_cam',to:'c_slots'},{from:'c_slots',to:'c_prod'},
@@ -588,7 +592,7 @@ BOARDS.push({
     {o:'Detection[]', oc:'data', creator:'YOLO postprocess + NMS', owner:'main (moved from worker)', consumer:'run_decision', death:'end run_decision', life:'per frame'},
     {o:'ROI (BestROI)', oc:'perc', creator:'BestROI.update()', owner:'main · roi_by_class', consumer:'CLS at confirm', death:'roi_by_class.clear() on confirm', life:'one voting window'},
     {o:'VoteResult', oc:'data', creator:'TemporalVoter.evaluate()', owner:'run_decision local', consumer:'confirm branch + tick()', death:'end run_decision', life:'per frame (history persists in voter)'},
-    {o:'CLS result / confirmed_value', oc:'data', creator:'SpeedSignClassifier.classify()', owner:'run_decision local', consumer:'legacy + shadow tick()', death:'end run_decision', life:'one confirm'},
+    {o:'CLS result / confirmed_value', oc:'data', creator:'SpeedSignClassifier.classify()', owner:'run_decision local', consumer:'pipeline tick() → L1 + momentary', death:'end run_decision', life:'one confirm'},
     {o:'EpisodeConfirmed', oc:'dec', creator:'L1 update()', owner:'tick() local', consumer:'L2.onValue / L3.decide', death:'end tick()', life:'one fire'},
     {o:'L2 State (belief)', oc:'dec', creator:'L2 Acquire', owner:'CurrentSpeedLimitManager (facade)', consumer:'L3 · L4 value · log', death:'never (no-forget) / reset()', life:'persists across frames'},
     {o:'AnnouncementAction', oc:'dec', creator:'L3 decide()', owner:'tick() local', consumer:'is_announce → log + L4', death:'end tick()', life:'one fire'},
@@ -643,7 +647,7 @@ BOARDS.push({
     {div:'sign_60 appears — presence continuous'},
     {f:'Voter',t:'CLS',l:'confirm sign_60'},
     {f:'CLS',t:'L1',l:'sign_60 (fresh=FALSE)'},
-    {f:'L1',t:'L2',l:'fired', b:'ACTIVE(50) → ACTIVE(60)  [Change K=1]'},
+    {f:'L1',t:'L2',l:'fired', b:'ACTIVE(50) → ACTIVE(60)  [Change → commit]'},
     {f:'L2',t:'L3',l:'changed=TRUE'},
     {f:'L3',t:'L4',l:'CHANGE'},
     {f:'L4',t:'Speaker',l:'🔊 "change_60"'},
@@ -719,7 +723,7 @@ BOARDS.push({
   ],
   notes:[
     {x:900,y:560,w:420,cls:'note',title:'NO arrow back to UNKNOWN',lines:['no-forget: presence loss never changes value.','Camera-only cannot know "no limit here".','Wrong-after-turn risk surfaced via age() telemetry.']},
-    {x:120,y:120,w:560,cls:'note',title:'K-hysteresis',lines:['A DIFFERENT value needs K consecutive confirms to commit.','The SAME value clears any pending challenge.','Default K=1 ⇒ commit on first differing confirm.']},
+    {x:120,y:120,w:560,cls:'note',title:'K-hysteresis',lines:['A DIFFERENT value needs K consecutive confirms to commit.','The SAME value clears any pending challenge.','Default K=2 ⇒ a different value needs 2 consecutive confirms.']},
     {x:120,y:770,w:560,cls:'data',title:'Internal state',lines:['current_ · pending_value_ · pending_count_ · last_confirmed_at_','age(now) = now − last_confirmed_at_  (telemetry only)']},
   ],
 });
@@ -789,7 +793,7 @@ BOARDS.push({
     map:{x:540,y:120,w:220,h:84,cls:'audio',title:'SpeedAudioMap.filename',lines:['pure · → "change_50.wav"','"" ⇒ skip']},
     slot:{x:810,y:120,w:250,h:96,cls:'infra',title:'pending_ (single slot)',lines:['latest-wins','overwrite drops stale','🔒 mutex + condvar']},
     athread:{x:1120,y:120,w:280,h:96,cls:'audio',title:'Audio Thread · run()',lines:['take latest filename','play OUTSIDE the lock']},
-    play:{x:1120,y:280,w:280,h:80,cls:'audio',title:'play_blocking → aplay',lines:['aplay -q -D plughw:0,0','blocks to end · non-preempt']},
+    play:{x:1120,y:280,w:280,h:80,cls:'audio',title:'aplay via posix_spawn',lines:['aplay -q -D plughw:0,0','preemptible (kill-aplay)']},
     amp:{x:1120,y:410,w:280,h:66,cls:'audio',title:'MAX98357A I2S amp'},
     spk:{x:1120,y:530,w:280,h:80,cls:'audio',title:'🔊 Speaker (3W)'},
   },
@@ -829,8 +833,8 @@ BOARDS.push({
       'Owner: SpeedSignClassifier / L2 current_',
       'Cause: class order · min_conf 0.70 · K too low']},
     {t:'Repeated announcement', c:'dec', lines:[
-      'Inspect: L1 fresh + L3   (note: [CONFIRMED]=authority)',
-      'Logs: [SHADOW][L3] action · [CONFIRMED]',
+      'Inspect: L1 fresh + L3   (L1–L4 is the authority)',
+      'Logs: [SHADOW][L3] action · fresh · age',
       'Owner: AnnouncementPolicy / L1 episode',
       'Cause: false re-arm (presence dropping) · rearm too small']},
     {t:'No reminder', c:'dec', lines:[
@@ -871,8 +875,8 @@ BOARDS.push({
   W:2400, H:1000,
   regions:[
     {x:20,y:60,w:2360,h:240,cls:'perc',  label:'PERCEPTION → DECISION (main thread)'},
-    {x:2030,y:312,w:300,h:160,cls:'legacy',label:'LEGACY AUTHORITY (current production)'},
-    {x:1160,y:500,w:1220,h:430,cls:'shadow',label:'SHADOW BELIEF PIPELINE (L1–L4) · facade tick() · lock-free'},
+    {x:2030,y:312,w:300,h:160,cls:'legacy',label:'LEGACY PATH — REMOVED at cutover 06-17'},
+    {x:1160,y:500,w:1220,h:430,cls:'shadow',label:'DECISION PIPELINE (L1–L4) — AUTHORITY · facade tick() · lock-free'},
   ],
   nodes:{
     camera:      {x:40,  y:120,w:250,h:150,cls:'s_idle',title:'Camera',             lines:['Picamera2 read()','RGB888 → BGR','GIL bracketed']},
@@ -883,9 +887,9 @@ BOARDS.push({
     voter:       {x:1490,y:120,w:250,h:150,cls:'s_idle',title:'TemporalVoter',       lines:['cand: —','votes: —','confirmed: —','win: []']},
     roi:         {x:1780,y:120,w:250,h:150,cls:'s_idle',title:'ROI Selection',       lines:['BestROI latch','highest-conf crop','→ CLS on confirm']},
     cls:         {x:2070,y:120,w:250,h:150,cls:'s_idle',title:'CLS Model',           lines:['roi: —','result: —','conf: —','infer: —']},
-    legacy:      {x:2070,y:330,w:250,h:130,cls:'legacy',title:'Legacy Pipeline',     lines:['voter + cooldown','[CONFIRMED] console','authority · no audio']},
+    legacy:      {x:2070,y:330,w:250,h:130,cls:'legacy',title:'Legacy Pipeline ❌ removed', lines:['removed at cutover 06-17','L1–L4 is the authority','(was: [CONFIRMED] console)']},
     l1:          {x:1200,y:560,w:250,h:150,cls:'s_idle',title:'L1 Lifecycle',        lines:['state: ARMED','last seen: —','rearm: —','fresh: —']},
-    l2:          {x:1490,y:560,w:250,h:150,cls:'s_idle',title:'L2 SpeedLimit',       lines:['state: UNKNOWN','limit: —','pending: —','K: 1','age: —']},
+    l2:          {x:1490,y:560,w:250,h:150,cls:'s_idle',title:'L2 SpeedLimit',       lines:['state: UNKNOWN','limit: —','pending: —','K: 2','age: —']},
     l3:          {x:1780,y:560,w:250,h:150,cls:'s_idle',title:'L3 Announce',         lines:['action: —','cooldown: —','last ann: —']},
     l4:          {x:2070,y:560,w:250,h:150,cls:'s_idle',title:'L4 Notification',     lines:['thread: —','playing: —','slot: —','latest-wins']},
     speaker:     {x:2070,y:760,w:250,h:140,cls:'s_idle',title:'Speaker',            lines:['MAX98357A I2S','idle']},
@@ -1169,7 +1173,7 @@ const GLOSS=[
   // การตัดสินใจ / belief
   {t:'TemporalVoter (ตัวโหวต)', c:'ตัดสินใจ', d:'สะสมผลหลายเฟรมแล้วค่อยยืนยัน เพื่อกันการสั่น/รบกวนของ YOLO'},
   {t:'vote / confirm', c:'ตัดสินใจ', d:'โหวต / ยืนยันผลเมื่อสะสมเสียงพอ (เช่น 4 จาก 10 เฟรม)'},
-  {t:'CooldownManager', c:'ตัดสินใจ', d:'กันประกาศซ้ำของป้ายเดิมในช่วงเวลาหนึ่ง (กันสแปม)'},
+  {t:'CooldownManager', c:'ตัดสินใจ', d:'(REMOVED 06-17) เดิมกันประกาศซ้ำ; ตอนนี้ anti-spam อยู่ที่ L3'},
   {t:'belief state (สถานะความเชื่อ)', c:'ตัดสินใจ', d:'ค่าที่ระบบ "เชื่อว่าเป็นจริงตอนนี้" — ต้องประเมินเอา ไม่ใช่เห็นตรง ๆ จากเฟรมเดียว'},
   {t:'K-hysteresis', c:'ตัดสินใจ', d:'ค่าใหม่ที่ต่างจากเดิมต้องยืนยันติดกัน K ครั้งก่อนจึงเปลี่ยนความเชื่อ (กันสั่น)'},
   {t:'no-forget (ไม่ลืม)', c:'ตัดสินใจ', d:'ถึงป้ายจะหายไปจากเฟรม ก็ไม่ลบความเชื่อเดิม (ไม่กลับเป็น UNKNOWN)'},
@@ -1177,9 +1181,9 @@ const GLOSS=[
   {t:'fresh', c:'ตัดสินใจ', d:'เป็นการเห็น "ใหม่" หลังป้ายหายไปแล้วกลับมา — ใช้ตัดสินว่าจะย้ำเตือนไหม'},
   {t:'re-arm', c:'ตัดสินใจ', d:'รีเซ็ตสถานะให้พร้อมเริ่ม episode ใหม่ เมื่อป้ายหายไปนานพอ'},
   {t:'facade (ฟาซาด)', c:'ตัดสินใจ', d:'คลาสบาง ๆ ที่ห่อและเดินสาย L1→L2→L3→L4 รวมไว้ที่เดียว'},
-  {t:'shadow (โหมดเงา)', c:'ตัดสินใจ', d:'รันคู่ขนานเพื่อทดสอบ ยังไม่มีอำนาจสั่งงานจริง — ไว้เทียบกับของเดิม'},
-  {t:'authority (อำนาจตัดสิน)', c:'ตัดสินใจ', d:'ฝั่งที่ผลลัพธ์ถูกใช้จริง ปัจจุบัน = legacy; แต่ "เสียง" ออกตามฝั่ง shadow'},
-  {t:'legacy path', c:'ตัดสินใจ', d:'ของเดิม (voter + cooldown) ที่ยังเป็นตัวตัดสินหลัก พิมพ์ [CONFIRMED] ออก console'},
+  {t:'shadow (โหมดเงา)', c:'ตัดสินใจ', d:'เดิมรันคู่ขนานเพื่อทดสอบ; cutover 06-17 แล้ว — L1–L4 เป็นตัวตัดสินจริง'},
+  {t:'authority (อำนาจตัดสิน)', c:'ตัดสินใจ', d:'ฝั่งที่ผลลัพธ์ถูกใช้จริง — ปัจจุบัน = L1–L4 (cutover 06-17); legacy ถูกถอดออกแล้ว'},
+  {t:'legacy path', c:'ตัดสินใจ', d:'ของเดิม (voter + cooldown, พิมพ์ [CONFIRMED]) — REMOVED ตอน cutover 06-17; L1–L4 แทน'},
   {t:'L1 SignEpisodeLifecycle', c:'ตัดสินใจ', d:'ชั้นที่ดูว่า "เห็นใหม่หรือเห็นต่อเนื่อง" (presence / episode / fresh)'},
   {t:'L2 CurrentSpeedLimitManager', c:'ตัดสินใจ', d:'ชั้นเก็บความเชื่อค่าจำกัดความเร็วปัจจุบัน + K + no-forget'},
   {t:'L3 AnnouncementPolicy', c:'ตัดสินใจ', d:'ชั้นตัดสินว่าจะพูดอะไร: CHANGE / REMINDER / SUPPRESS'},
@@ -1190,7 +1194,7 @@ const GLOSS=[
   {t:'L4 NotificationManager', c:'เสียง', d:'ตัวจัดการเล่นเสียงแจ้งเตือน มีเธรดเสียงของตัวเอง'},
   {t:'SpeedAudioMap', c:'เสียง', d:'แปลง (action, ค่า) → ชื่อไฟล์เสียง เช่น "change_50.wav"'},
   {t:'aplay', c:'เสียง', d:'โปรแกรมเล่นไฟล์เสียง .wav บน Linux / Raspberry Pi'},
-  {t:'non-preemptive', c:'เสียง', d:'เล่นคลิปจนจบก่อน ไม่ตัดกลางคัน'},
+  {t:'preemption (kill-aplay)', c:'เสียง', d:'ป้าย safety แทรกคลิปที่กำลังเล่นได้กลางคัน (ฆ่า aplay ผ่าน posix_spawn) — เดิมเล่นจนจบ'},
   {t:'MAX98357A / I2S', c:'เสียง', d:'ชิปแอมป์ขยายเสียงดิจิทัล + มาตรฐานสายส่งสัญญาณเสียง'},
 
   // ทั่วไป
@@ -1378,7 +1382,7 @@ setTimeout(()=>hint.remove(), 7000);
       case'voter':return['cand: '+s.voter.candidate,'votes: '+s.voter.votes+'/'+s.voter.required,'confirmed: '+s.voter.confirmed,'win:['+s.voter.window.map(x=>x?simNum(x):'·').join(',')+']'];
       case'roi':return['BestROI latch','highest-conf crop','→ CLS on confirm'];
       case'cls':return['roi: '+s.cls.roiSize,'result: '+s.cls.result,'conf: '+s.cls.conf,'infer: '+s.cls.inferMs+'ms'];
-      case'legacy':return['voter + cooldown','[CONFIRMED] console','authority · no audio'];
+      case'legacy':return['REMOVED at cutover 06-17','was: voter + cooldown → [CONFIRMED]','L1–L4 is now the authority'];
       case'l1':return['state: '+s.l1.state,'last seen: '+tt(s.l1.lastSeen),'rearm: '+s.l1.rearmActive,'fresh: '+s.l1.fresh];
       case'l2':return['state: '+s.l2.state,'limit: '+(s.l2.current!=null?simNum(s.l2.current):'—'),'pending: '+(s.l2.pending!=null?simNum(s.l2.pending):'—')+' ('+s.l2.pendingCount+')','K: '+s.config.K,'age: '+(s.l2.state==='ACTIVE'?((s.now-s.l2meta.lastConfirmedAt)/1000).toFixed(1)+'s':'—')];
       case'l3':{const cd=s.l3.lastAnnounceAt==null?0:Math.max(0,(s.config.reminderMs-(s.now-s.l3.lastAnnounceAt))/1000);
@@ -1486,11 +1490,11 @@ setTimeout(()=>hint.remove(), 7000);
     voter:{t:'TemporalVoter',p:['Accumulates detections over a window; CONFIRMS only when a class hits the vote threshold.'],w:['Every noisy YOLO frame would fire the pipeline → flicker = false events.'],y:['Temporal filtering: one frame is not a decision. Production uses 4-of-10; this sim defaults lower so short demos confirm — adjust "votes".'],th:'ตัวโหวตตามเวลา — สะสมหลายเฟรมแล้วค่อยยืนยัน กันการสั่น'},
     roi:{t:'ROI Selection',p:['Keeps the highest-confidence crop per class during a voting window; cleared on confirm.'],w:['Classifier runs on a blurry/partial frame → worse accuracy.'],y:['Confirm-then-Classify: classify ONCE, on the best crop, at the confirm event.'],th:'เลือก ROI — เก็บ crop ที่ชัดสุดในรอบโหวต'},
     cls:{t:'CLS Model',p:['Classifies the actual number (50/60/80/90/100). Runs only at a confirm event.'],w:['You would trust the unstable YOLO sub-class → wrong speed under flicker.'],y:['CLS is the VALUE AUTHORITY. Separating presence (YOLO) from value (CLS) is the core redesign.'],th:'โมเดลจำแนกค่า — ฟันธงตัวเลขบนป้าย เป็นเจ้าของค่า'},
-    legacy:{t:'Legacy Pipeline',p:['Current PRODUCTION authority: voter + CooldownManager. Prints "[CONFIRMED]"; no audio.'],w:['No production behaviour / nothing to validate the shadow against.'],y:['Still the source of truth; the shadow L1–L4 runs in parallel and is compared before any cutover.'],th:'ไปป์ไลน์เดิม — ตัวตัดสินจริงตอนนี้ พิมพ์ [CONFIRMED] ไม่มีเสียง'},
+    legacy:{t:'Legacy Pipeline (removed)',p:['Old path: voter + CooldownManager printing "[CONFIRMED]" (console, no audio). REMOVED at the cutover on 2026-06-17.'],w:['Episode identity was tied to the unstable YOLO sub-class → flicker became a false value-change.'],y:['Superseded by L1–L4, which became the authority at cutover; L3 now owns anti-spam.'],th:'ไปป์ไลน์เดิม — ถูกถอดออกตอน cutover 06-17; L1–L4 เป็นตัวตัดสินแทน'},
     l1:{t:'L1 SignEpisodeLifecycle',p:['Tracks one sighting episode: ARMED → CONFIRMED → RELEASING → re-arm.','fresh=TRUE only on Armed→Confirmed (a NEW sighting after a gap).'],w:['Cannot tell a continuous sign from a re-encounter → spurious repeats or missed reminders.'],y:['VALUE-BLIND. reset() must NEVER be wired to presence loss (would break L2 no-forget). rearm_after default 600 ms.'],th:'วงจรชีวิตการเห็นป้าย — แยกเห็นต่อเนื่องกับเห็นใหม่ (fresh)'},
     l2:{t:'L2 CurrentSpeedLimitManager',p:['Holds the persistent BELIEF of the speed limit (UNKNOWN/ACTIVE).','Acquire commits immediately; a DIFFERENT value needs K confirms; same value refreshes & clears pending.'],w:['A momentary occlusion or one bad CLS frame would wipe/flip the limit.'],y:['NO-FORGET: presence loss never changes the value. K-hysteresis rejects unstable CLS flips. age() is telemetry only.'],th:'ความเชื่อค่าจำกัดความเร็ว — no-forget + K-hysteresis กันค่าสั่น'},
     l3:{t:'L3 AnnouncementPolicy',p:['Decides what to SAY: CHANGE (always), REMINDER (fresh re-encounter, gated by cooldown), or SUPPRESS.'],w:['Either constant nagging or missing real changes.'],y:['Anti-spam lives HERE, not in perception. CHANGE bypasses but resets the cooldown; REMINDER also resets it. Default 180 s.'],th:'นโยบายประกาศ — ตัดสินว่าจะพูด CHANGE/REMINDER หรือเงียบ'},
-    l4:{t:'L4 NotificationManager',p:['Maps (action,value) → wav and plays on a dedicated audio thread. Single slot, latest-wins; play outside the lock.'],w:['Synchronous play blocks perception; a FIFO queue plays STALE state.'],y:['Latest-wins: a burst collapses to first+last; the speaker never lies. aplay subprocess, non-preemptive.'],th:'ตัวจัดการเสียง — เล่น wav เธรดแยก เก็บค่าล่าสุด ไม่บล็อกการมองเห็น'},
+    l4:{t:'L4 NotificationManager',p:['Maps (action,value) → wav and plays on a dedicated audio thread. Single slot, latest-wins; play outside the lock.'],w:['Synchronous play blocks perception; a FIFO queue plays STALE state.'],y:['Latest-wins: a burst collapses to first+last; the speaker never lies. aplay via posix_spawn — preemptible (kill-aplay) so safety can interrupt.'],th:'ตัวจัดการเสียง — เล่น wav เธรดแยก เก็บค่าล่าสุด ไม่บล็อกการมองเห็น; ตัดกลางคันได้ (kill-aplay)'},
     speaker:{t:'Speaker',p:['MAX98357A I2S amp + 3 W speaker. Speaks the Thai voice clip.'],w:['No audible notification.'],y:['Final non-authoritative output of the SHADOW path (--shadow --audio). Legacy console authority untouched.'],th:'ลำโพง — เอาต์พุตเสียงจริงของฝั่ง shadow'},
   };
   const why=document.createElement('div'); why.id='simWhy';
