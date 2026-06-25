@@ -4,11 +4,13 @@
 > Overwritten whenever a major architectural decision changes.
 > Detailed history lives in the dated session reports in `debug_reports/`.
 
-**Last updated:** 2026-06-20
+**Last updated:** 2026-06-25 (status reconciled with git; presentation day 06-24 journaled)
 **Branch:** `fix-gil`
-**HEAD:** `44a735c feat(audio): preempt-kill aplay via posix_spawn for safety interrupt`
-**Remote:** 3 commits ahead of `origin/fix-gil` (unpushed). Working tree has **uncommitted
-re-delivery** (8 files). Models/audio untracked + kept local since 2026-06-20.
+**HEAD:** `f7a7cee docs(eod): 2026-06-20 session report + PROJECT_STATUS update`
+**Remote:** **in sync with `origin/fix-gil` — all refactor-#3 work committed AND pushed.**
+Re-delivery (CHANGE-only) committed `f4f5166` (the 8 files 06-20 had listed as "uncommitted").
+Models/audio/demo-media untracked + kept local. *(The 06-20 docs were written pre-commit and
+left stale "uncommitted/3-ahead" text — corrected here; see `2026-06-24_session_report.md`.)*
 **Direction:** **Cognitive Driver Assistance** — non-speed behavior **architecture FROZEN
 2026-06-15** (see next section).
 **SPEED CUTOVER DONE + Pi-verified 2026-06-17:** L1–L4 is now the speed authority; legacy
@@ -23,8 +25,15 @@ Zone 30 > Ped Warning 25 > Ped Crossing 20 (=threshold). Detail: `2026-06-17_ses
 mid-sentence, Pi-verified (commit `44a735c`); **buzzer earcon** (two-beep, Safety-only) baked
 in front of the 3 safety WAVs; **re-delivery (CHANGE-only)** — a preempted speed CHANGE is
 re-announced from **L2 current belief** when the channel frees (L4 `is_idle` + Arbiter `poll`),
-51/51 unit checks, **Pi-working but uncommitted + not yet fully tested.** Repo hygiene: stopped
-tracking models/audio (commit `5401499`). Detail: `2026-06-20_session_report.md`.
+51/51 unit checks, **committed `f4f5166` + pushed; Pi-working.** One all-angle tick remains (belief
+60→80 mid-safety must announce 80) on a future Pi soak. Repo hygiene: stopped tracking models/audio
+(commit `5401499`). Detail: `2026-06-20_session_report.md`.
+**PRESENTATION DAY 2026-06-24:** GitHub reframe = "Cognitive Driver Assistance System"; repo slug →
+`raspi-cognitive-adas`; README §1–5 locked (English, FPS = **~18**); ARCHITECTURE_VIEWER.html
+restyled + all 11 boards made post-cutover-correct. **Safety-family precision MEASURED** (Ped
+Warning 0.975 · Ped Crossing 0.978 · School Zone 0.972 @conf0.45 → suppression at one tier level,
+no per-class split; provisional windows OK now). Thermal-governor scenario parked. No decision code
+changed. Detail: `2026-06-24_session_report.md`.
 **Perf note (2026-06-16):** speed investigation found **async halves throughput** — run
 production in **SYNC**: ~19 FPS @512 (was ~10 async), CPU 80%→50-60%, zero accuracy/behaviour
 change. int8 ruled out on CPU. Detail: `FP32_SPEED_ENVELOPE.md`, `INT8_AB_RESULTS.md`.
@@ -378,31 +387,36 @@ A4 housekeeping = delete orphaned `SpeedSignLifecycle`.)
 
 *Brain 2 (Momentary) — next:*
 1. ✅ **Notification Arbiter DONE** (commit `e9c8419`) — both brains route through it.
-2. ✅ **Refactor #3 DONE** — kill-aplay (`44a735c`) + completion-feedback (L4 `is_idle` poll) +
-   **re-delivery (CHANGE-only)** from L2 current belief. Re-delivery is Pi-working but
-   **uncommitted + not fully tested** — finish all-angle test (esp. belief 60→80 mid-safety →
-   must announce 80) then commit.
-3. **Bench-tune** `MomentaryPolicy` numbers (windows/ranks) + reminder/suppression cooldowns
-   (currently test placeholders — user sets production minutes) + measure **per-class precision
-   of the Safety family** (gates "low suppression").
+2. ✅ **Refactor #3 DONE + committed `f4f5166` + pushed** — kill-aplay (`44a735c`) +
+   completion-feedback (L4 `is_idle` poll) + **re-delivery (CHANGE-only)** from L2 current belief.
+   Pi-working; one all-angle tick remains on a future Pi soak (belief 60→80 mid-safety → must
+   announce 80).
+3. ✅ **Safety-family precision MEASURED 2026-06-24** (Ped Warning 0.975 · Ped Crossing 0.978 ·
+   School Zone 0.972 @conf0.45 → suppression at one tier level). **Bench-tune** `MomentaryPolicy`
+   numbers + reminder/suppression cooldowns (test placeholders Safety 5s/Warning 15s/Restriction
+   30s → user sets production; provisional values OK now).
+4. **Presentation:** README §6–10 + GitHub ops (rename → `raspi-cognitive-adas`, Pages, `docs/`).
 
 ---
 
 ## Resume Point For Next Session
 
-- **Read:** this file, then `2026-06-17_session_report.md` (cutover + Brain 2 bring-up), then
+- **Read:** this file, then `2026-06-24_session_report.md` (presentation + safety precision), then
+  `2026-06-17_session_report.md` (cutover + Brain 2 bring-up), then
   `2026-06-15_session_report.md` (Brain 2 architecture FROZEN), then
   `2026-06-14_session_report.md` (behavior laws + Q1–Q8). Older: `FP32_SPEED_ENVELOPE.md` /
   `INT8_AB_RESULTS.md` (06-16 speed perf), `2026-06-10_session_report.md` (speed L1–L4 detail).
 - **Finished (Pi-verified, pushed `origin/fix-gil`):** speed cutover (L1–L4 = authority, L3
   anti-spam, K=2 default); shared L4 (#1); Brain 2 core (MomentaryEngine + MomentaryPolicy +
   BehaviorPolicyRouter); class→wav `MomentaryAudioMap` (#2); 10 momentary WAVs; **momentary
-  speech audible on Pi**; safety re-ranked (School Zone 30 > Ped Warning 25 > Ped Crossing 20).
-- **In progress / next:** refactor #3 **DONE** (Arbiter wiring + kill-aplay + buzzer +
-  re-delivery). **Finish all-angle Pi test of re-delivery** (esp. belief 60→80 mid-safety →
-  must announce 80; safety-over-safety then re-deliver; no zombies) then **commit** the 8
-  re-delivery files + consider `git push` (drops old model/audio blobs from GitHub). Then
-  bench-tune `MomentaryPolicy`/cooldown numbers + measure Safety-family precision.
+  speech audible on Pi**; safety re-ranked (School Zone 30 > Ped Warning 25 > Ped Crossing 20);
+  **refactor #3 (Arbiter wiring + kill-aplay + buzzer + re-delivery) committed `f4f5166` + pushed.**
+- **Next:** (a) **Presentation:** README §6–10 (Hardware/Power, 8 Laws, Build&Run, Limitations,
+  Tech Stack); GitHub ops — rename repo → `raspi-cognitive-adas`, default branch `main`, enable
+  Pages, build `docs/` (architecture.png, hardware.jpg, demo.gif from `demo/*.mp4`). (b) **Bench /
+  Pi soak:** set production reminder/suppression + `MomentaryPolicy` numbers (precision now measured
+  → provisional values OK); one remaining re-delivery all-angle tick (belief 60→80 mid-safety must
+  announce 80); K=1 vs K=2 final measured choice.
 - **Do NOT:** re-open `attention_rank`/threshold structure (only numbers tune); add an episode
   lifecycle to momentary; touch L1 re-arm for re-delivery (it's an L3-level re-announce); fix
   `MomentaryPolicy` numbers from assumption; wire `reset()` to presence loss; break the
