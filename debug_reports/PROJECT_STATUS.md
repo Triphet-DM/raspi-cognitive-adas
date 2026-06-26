@@ -4,7 +4,7 @@
 > Overwritten whenever a major architectural decision changes.
 > Detailed history lives in the dated session reports in `debug_reports/`.
 
-**Last updated:** 2026-06-25 (EOD — benchmark capture + README case-study redesign)
+**Last updated:** 2026-06-26 (EOD — viewer Brain 2/Arbiter fix + README image refresh + Brain 3 architecture LOCKED)
 **Branch:** `fix-gil`
 **HEAD:** `f53b573 docs(eod): 2026-06-20 session report + PROJECT_STATUS update` (committed work in
 sync with `origin/fix-gil`).
@@ -12,6 +12,19 @@ sync with `origin/fix-gil`).
 `docs/demo.jpg`, `.gitignore` (demo/* ignored), `demo/log.txt` untracked. Models/audio/raw-demo
 kept local. *(Re-delivery committed `f4f5166` + pushed back on 06-20; the 06-20 docs were stale
 pre-commit text, reconciled 06-25.)*
+**2026-06-26 — VIEWER FIX + BRAIN 3 LOCKED:** (a) `ARCHITECTURE_VIEWER.html` **Board 0 + Board 10**
+were pre-cutover / speed-only (drew async as canonical, **no Brain 2 / Arbiter**) → added
+Router/Momentary/Arbiter (Board 10 **fully animated**: scenarios G=preempt / H=suppress), marked async
+**optional**; verified vs source that **BOTH brains route through the Arbiter** before L4
+(`ShadowSpeedLimitPipeline.cpp:91`; speed ranks <20 → never preempt). Committed `11440ba` (fix-gil) +
+`04e1d2c` (main). (b) README "More on-device detections" → **4 fresh Pi-5 captures**, main `6eabca4`.
+(c) `GIT_CHEATSHEET.md` added (fix-gil `e70c28f`). (d) **BRAIN 3 (drowsiness) ARCHITECTURE LOCKED**
+(meeting Diamond+Claude+GPT): **Brio 100** driver-cam @640×480 → **YuNet** → **PFLD-NCNN** →
+**EAR+PERCLOS+HeadPose** weighted Fatigue Score → **Tier-0 highest-rank** alert (Quality→Temporal→Score
+gated); **always-on / fps-floor>0 / Environmental-Risk-Prior** cadence (never gate on Brain-2);
+**"persistent-but-must-ESCALATE"** fatigue state machine; **Option B** (same PFLD PC→Pi). Rejected:
+dlib-deploy, always-on-gating, multi-signal-AND, tracking-in-v1. **Only blocker = verify PFLD NCNN
+port.** Detail: `2026-06-26_session_report.md` + `BRAIN3_FACE_MODELS_SHORTLIST.md` "DECISIONS LOCKED".
 **PRESENTATION (06-24→06-25):** README rebuilt as an **Embedded AI Systems Engineering case study**
 (16 sections; architecture/behaviour = identity high, benchmarking/backend/low-precision = star).
 Full benchmark suite captured + **post-export consistency proven** (best.pt vs NCNN export, same
@@ -421,7 +434,13 @@ A4 housekeeping = delete orphaned `SpeedSignLifecycle`.)
 
 ## Resume Point For Next Session
 
-- **Read:** this file, then `2026-06-25_session_report.md` (benchmarks + README case-study +
+> **CURRENT PRIORITY (2026-06-26): Brain 3 (drowsiness).** Architecture LOCKED — see
+> `2026-06-26_session_report.md` + `BRAIN3_FACE_MODELS_SHORTLIST.md` "DECISIONS LOCKED". **Only
+> blocker = verify a usable PFLD NCNN port on PC (scheme 68/98 + quality)**, then prototype on PC
+> (Option B). Do NOT re-open the locked decisions, gate Brain 3 on Brain-2, or build before the port
+> is verified.
+
+- **Read:** this file, then `2026-06-26_session_report.md` (viewer fix + Brain 3 lock), then `2026-06-25_session_report.md` (benchmarks + README case-study +
   export-consistency A/B), then `2026-06-24_session_report.md` (presentation + safety precision),
   then `2026-06-17_session_report.md` (cutover + Brain 2 bring-up), then
   `2026-06-15_session_report.md` (Brain 2 architecture FROZEN), then
