@@ -380,7 +380,8 @@ BOARDS.push({
     {x:40,y:870,w:4240,h:1060,cls:'dec',  label:'MAIN THREAD (always) — owns nearly everything · run_decision + render + L1–L4 producer'},
     {x:40,y:1950,w:4240,h:330,cls:'audio',label:'AUDIO THREAD — only when --audio'},
     {x:2270,y:1100,w:380,h:210,cls:'legacy',label:'LEGACY PATH — REMOVED at cutover 06-17'},
-    {x:2700,y:870,w:1430,h:440,cls:'shadow',label:'DECISION AUTHORITY (L1–L4) → SPEAKER'},
+    {x:2700,y:870,w:1430,h:440,cls:'shadow',label:'BRAIN 1 — Persistent-State speed AUTHORITY (L1–L4)'},
+    {x:2700,y:1330,w:1430,h:300,cls:'shadow',label:'BRAIN 2 (Momentary) + NOTIFICATION ARBITER → shared L4 · cross-brain attention scheduler'},
   ],
   nodes:{
     camera:{x:120,y:230,w:300,h:130,cls:'perc',title:'Picamera2Camera',lines:['read(): embedded CPython','RGB888 → BGR (cvtColor)','GIL Ensure/Release']},
@@ -412,6 +413,10 @@ BOARDS.push({
     action:{x:3460,y:1145,w:250,h:100,cls:'data',title:'Action',lines:['CHANGE / REMINDER']},
     l4:{x:3460,y:1010,w:300,h:110,cls:'audio',title:'L4 NotificationManager',lines:['SpeedAudioMap → wav','single-slot latest-wins']},
     audiofile:{x:3820,y:1010,w:260,h:110,cls:'data',title:'Audio file',lines:['"change_50.wav"']},
+
+    router:{x:2740,y:1360,w:300,h:120,cls:'dec',title:'BehaviorPolicyRouter',lines:['after confirm','speed → L1 · non-speed → Brain 2']},
+    mom:{x:3080,y:1345,w:350,h:150,cls:'dec',title:'MomentaryEngine + Policy',lines:['NO episode lifecycle','now − last_notified[cls] ≥ window?','attention_rank per class']},
+    arb:{x:3470,y:1345,w:300,h:150,cls:'infra',title:'NotificationArbiter',lines:['SELECT highest rank','PREEMPT rank>cur & ≥ THRESHOLD(20)','kill-aplay · re-deliver CHANGE']},
 
     metrics:{x:560,y:1480,w:330,h:140,cls:'infra',title:'Performance metrics',lines:['StageTimes · RollingAverage','TimingAverages · counters','print_performance']},
     debug:{x:940,y:1480,w:330,h:140,cls:'infra',title:'Debugging subsystem',lines:['[DET] [CLS] [SHADOW][L3]','--save-roi-debug crops']},
@@ -450,6 +455,10 @@ BOARDS.push({
     {from:'l1',to:'l2'},{from:'l2',to:'l3'},
     {from:'l3',to:'action',label:'Action',fromSide:'bottom',toSide:'left'},
     {from:'action',to:'l4',fromSide:'top',toSide:'bottom'},
+    {from:'confirmed',to:'router',label:'route',cls:'shadow',fromSide:'bottom',toSide:'top'},
+    {from:'router',to:'mom',label:'non-speed · 10 cls',cls:'shadow'},
+    {from:'mom',to:'arb',label:'announce + rank'},
+    {from:'arb',to:'l4',label:'winner / preempt (shared L4)',fromSide:'top',toSide:'bottom'},
     {from:'l4',to:'audiofile',label:'wav'},
     {from:'audiofile',to:'nm_cons',label:'slot 🔒 latest-wins',cls:'audio',fromSide:'bottom',toSide:'top'},
     {from:'nm_cons',to:'speaker'},
@@ -466,12 +475,12 @@ BOARDS.push({
     {x:120,y:55,w:560,cls:'data',title:'① CAPTURE'},
     {x:760,y:55,w:780,cls:'data',title:'② DETECT'},
     {x:1560,y:55,w:1100,cls:'data',title:'③ CLASSIFY · VOTE · CONFIRM'},
-    {x:2740,y:55,w:1000,cls:'data',title:'④ BELIEF · ANNOUNCE'},
+    {x:2740,y:55,w:1000,cls:'data',title:'④ ROUTE · BELIEF · ANNOUNCE · ARBITRATE'},
     {x:3820,y:55,w:400,cls:'data',title:'⑤ PLAY'},
     {x:2100,y:195,w:1000,cls:'note',title:'OWNERSHIP — created/owned by main()',lines:['CameraThread · AsyncDetectionWorker · YoloDetector','SpeedSignClassifier (held by YoloDetector)','TemporalVoter · roi_by_class  (CooldownManager removed)','ShadowSpeedLimitPipeline → L1·L2·L3·L4','MomentaryEngine · BehaviorPolicyRouter · NotificationArbiter','NotificationManager · AppConfig']},
     {x:3180,y:195,w:1040,cls:'note',title:'SYNCHRONIZATION (1 producer → 1 consumer)',lines:['camera→main: frame CLONE (per-slot mutex + atomic idx)','main↔worker: pending/result buffer (1 mutex + 1 condvar)','main→audio: filename slot (mutex + condvar)','ALL latest-wins · L1–L4 lock-free (main only)']},
     {x:1920,y:530,w:740,cls:'note',title:'LIFECYCLE (left → right)',lines:['capture → detect → classify → vote','→ confirm → belief → announce → play']},
-    {x:2760,y:530,w:1100,cls:'note',title:'AUTHORITY',lines:['L1–L4 is the speed AUTHORITY (cutover 06-17)','legacy voter+cooldown "[CONFIRMED]" path REMOVED','+ Brain 2 (momentary) + Notification Arbiter — see Board 1']},
+    {x:2760,y:530,w:1100,cls:'note',title:'AUTHORITY',lines:['L1–L4 is the speed AUTHORITY (cutover 06-17)','legacy voter+cooldown "[CONFIRMED]" path REMOVED','Brain 2 (momentary) + Notification Arbiter drawn below → shared L4']},
   ],
 });
 
@@ -872,16 +881,17 @@ BOARDS.push({
   id:'b10', group:'Live Sim', name:'10 · Live Simulator', icon:'#f783ac',
   title:'Board 10 — Live Architecture Simulator',
   sub:'animated data-flow · live module state in every block · debugger · click a block for "why"',
-  W:2400, H:1000,
+  W:2400, H:1220,
   regions:[
-    {x:20,y:60,w:2360,h:240,cls:'perc',  label:'PERCEPTION → DECISION (main thread)'},
+    {x:20,y:60,w:2360,h:240,cls:'perc',  label:'PERCEPTION → DECISION · capture = SYNC (default) · CameraThread/AsyncWorker = OPTIONAL --async-* path'},
     {x:2030,y:312,w:300,h:160,cls:'legacy',label:'LEGACY PATH — REMOVED at cutover 06-17'},
-    {x:1160,y:500,w:1220,h:430,cls:'shadow',label:'DECISION PIPELINE (L1–L4) — AUTHORITY · facade tick() · lock-free'},
+    {x:1160,y:500,w:1220,h:430,cls:'shadow',label:'BRAIN 1 — Persistent-State speed (L1–L4) · facade tick() · lock-free'},
+    {x:1160,y:955,w:1220,h:235,cls:'shadow',label:'BRAIN 2 (Momentary) + NOTIFICATION ARBITER → shared L4 · cross-brain attention scheduler'},
   ],
   nodes:{
     camera:      {x:40,  y:120,w:250,h:150,cls:'s_idle',title:'Camera',             lines:['Picamera2 read()','RGB888 → BGR','GIL bracketed']},
-    cameraThread:{x:330, y:120,w:250,h:150,cls:'s_idle',title:'CameraThread',        lines:['fps: —','frame #: —','capture: —']},
-    doubleBuffer:{x:620, y:120,w:250,h:150,cls:'s_idle',title:'Double Buffer',       lines:['write slot: —','read slot: —','avail: —','producer: —','consumer: —']},
+    cameraThread:{x:330, y:120,w:250,h:150,cls:'s_idle',title:'CameraThread ⟨async opt⟩', lines:['fps: —','frame #: —','capture: —']},
+    doubleBuffer:{x:620, y:120,w:250,h:150,cls:'s_idle',title:'Double Buffer ⟨async opt⟩',lines:['write slot: —','read slot: —','avail: —','producer: —','consumer: —']},
     asyncWorker: {x:910, y:120,w:250,h:150,cls:'s_idle',title:'AsyncDetectionWorker',lines:['busy: —','latest-wins: —','proc frame: —','dropped: —']},
     yolo:        {x:1200,y:120,w:250,h:150,cls:'s_idle',title:'YOLO Detector',       lines:['conf: —','box: —','class: —','infer: —']},
     voter:       {x:1490,y:120,w:250,h:150,cls:'s_idle',title:'TemporalVoter',       lines:['cand: —','votes: —','confirmed: —','win: []']},
@@ -893,6 +903,9 @@ BOARDS.push({
     l3:          {x:1780,y:560,w:250,h:150,cls:'s_idle',title:'L3 Announce',         lines:['action: —','cooldown: —','last ann: —']},
     l4:          {x:2070,y:560,w:250,h:150,cls:'s_idle',title:'L4 Notification',     lines:['thread: —','playing: —','slot: —','latest-wins']},
     speaker:     {x:2070,y:760,w:250,h:140,cls:'s_idle',title:'Speaker',            lines:['MAX98357A I2S','idle']},
+    router:      {x:1200,y:985,w:250,h:150,cls:'s_idle',title:'BehaviorPolicyRouter',lines:['route: —','brain: —']},
+    momentary:   {x:1490,y:985,w:250,h:150,cls:'s_idle',title:'Momentary Engine',   lines:['cls: —','since: —','window: —','decision: —']},
+    arbiter:     {x:1780,y:985,w:300,h:150,cls:'s_idle',title:'Notification Arbiter',lines:['incoming: —','current rank: —','threshold: 20','decision: —']},
   },
   edges:[
     {from:'camera',to:'cameraThread'},
@@ -903,11 +916,16 @@ BOARDS.push({
     {from:'voter',to:'roi'},
     {from:'roi',to:'cls'},
     {from:'cls',to:'legacy',fromSide:'bottom',toSide:'top',cls:'legacy',label:'authority'},
-    {from:'cls',to:'l1',fromSide:'bottom',toSide:'top',label:'confirmed_value'},
+    {from:'cls',to:'router',fromSide:'bottom',toSide:'top',label:'confirmed sign'},
     {from:'yolo',to:'l1',fromSide:'bottom',toSide:'top',dash:true,label:'raw presence'},
+    {from:'router',to:'l1',fromSide:'top',toSide:'bottom',label:'speed family'},
+    {from:'router',to:'momentary',label:'non-speed · 10 cls'},
     {from:'l1',to:'l2'},
     {from:'l2',to:'l3'},
-    {from:'l3',to:'l4'},
+    {from:'l3',to:'arbiter',fromSide:'bottom',toSide:'top',dash:true,label:'speed announce + rank'},
+    {from:'momentary',to:'arbiter',label:'announce + rank'},
+    {from:'arbiter',to:'l4',fromSide:'right',toSide:'bottom',label:'PLAY / PREEMPT'},
+    {from:'arbiter',to:'l3',fromSide:'left',toSide:'left',dash:true,cls:'note',label:'preempted CHANGE → re-deliver'},
     {from:'l4',to:'speaker',fromSide:'bottom',toSide:'top'},
   ],
   notes:[
@@ -916,6 +934,12 @@ BOARDS.push({
       'INPUT = inject one frame · SCENARIO = run a sequence.',
       'Debug + Next Tick = step ONE stage at a time.',
       'Pan/zoom/select work like every other board.']},
+    {x:620,y:312,w:560,cls:'note',title:'Capture path & two brains',lines:[
+      'SYNC = production (camera read inline on main thread).',
+      'CameraThread → Double Buffer → AsyncWorker = OPTIONAL',
+      '--async-camera/--async-detect path (deprecated, kept for study).',
+      'Speed (Brain 1) + Momentary (Brain 2) BOTH arbitrate by',
+      'attention_rank before the shared L4 (rank ≥ 20 may preempt).']},
   ],
 });
 
@@ -1238,9 +1262,15 @@ setTimeout(()=>hint.remove(), 7000);
 (function(){
   const B10 = BOARDS.find(x=>x.id==='b10');
   const SIM_SIGNS=['sign_50','sign_60','sign_80','sign_90','sign_100'];
+  // Brain 2 momentary classes → attention_rank (PROVISIONAL, from PROJECT_STATUS) + suppression window (ms, test placeholders)
+  const SIM_MOM={School_Zone:30,Pedestrian_crossing:20,curve_ahead:10,no_parking:4};
+  const SIM_MOM_WIN={School_Zone:5000,Pedestrian_crossing:5000,curve_ahead:15000,no_parking:30000};
+  const SPEED_RANK={CHANGE:12,REMINDER:2};               // speed ranks < 20 → speed never preempts
+  const INTERRUPT_THRESHOLD=20, NOMINAL_CLIP=300;         // arbiter: rank ≥ 20 may preempt · busy-window (sim-compressed; real scaffold ≈ 2500 ms)
+  const isSpeed=c=>SIM_SIGNS.includes(c);
   const SIM_STCLS={idle:'s_idle',processing:'s_proc',success:'s_ok',rejected:'s_rej',waiting:'s_wait'};
   const SIM_DOT  ={idle:'#94a3b8',processing:'#eab308',success:'#22c55e',rejected:'#ef4444',waiting:'#3b82f6'};
-  const MODS=['camera','cameraThread','doubleBuffer','asyncWorker','yolo','voter','roi','cls','legacy','l1','l2','l3','l4','speaker'];
+  const MODS=['camera','cameraThread','doubleBuffer','asyncWorker','yolo','voter','roi','cls','router','momentary','arbiter','legacy','l1','l2','l3','l4','speaker'];
   const BASE_EDGES = B10.edges.map(e=>({...e}));
 
   const simRnd=(a,b)=>+(a+Math.random()*(b-a)).toFixed(2);
@@ -1260,7 +1290,10 @@ setTimeout(()=>hint.remove(), 7000);
       l1:{state:'ARMED',lastSeen:0,rearmActive:false,fresh:false},
       l2:{state:'UNKNOWN',current:null,pending:null,pendingCount:0}, l2meta:{lastConfirmedAt:0},
       l3:{lastAction:'—',lastAnnounceAt:null},
-      l4:{threadActive:false,playing:'—',pendingSlot:'—',queueState:'latest-wins (1 slot)'}};
+      l4:{threadActive:false,playing:'—',pendingSlot:'—',queueState:'latest-wins (1 slot)'},
+      router:{route:'—',brain:'—'},
+      momentary:{cls:'—',since:'—',window:'—',decision:'—'}, momMeta:{last:{}},
+      arbiter:{incoming:'—',current:0,decision:'—'}, arbMeta:{currentRank:0,busyUntil:0,eligible:false,owed:false}};
   }
   function simL2(s,value){
     const K=s.config.K;
@@ -1301,9 +1334,9 @@ setTimeout(()=>hint.remove(), 7000);
         s.worker.processingFrame=s.frameId; s.colors.asyncWorker='processing';
         lg(s,'processing',`ASYNC WORKER: submit frame #${s.frameId} (latest-wins, dropped=${s.worker.dropped})`); }},
      {block:'yolo',run:s=>{ s.activeBlock='yolo'; s.yolo.inferMs=simJit(93,8); const inp=s.tmp.input;
-        if(inp){ s.yolo.conf=simRnd(.55,.95); s.yolo.box=simBox(); s.yolo.cls=inp; s.tmp.presence=true; s.colors.yolo='success';
+        if(inp){ s.yolo.conf=simRnd(.55,.95); s.yolo.box=simBox(); s.yolo.cls=inp; s.tmp.presence=true; s.tmp.speedPresence=isSpeed(inp); s.colors.yolo='success';
           lg(s,'success',`YOLO: detected ${inp} conf=${s.yolo.conf} box=[${s.yolo.box}] (${s.yolo.inferMs}ms)`); }
-        else { s.yolo.conf=0; s.yolo.box=null; s.yolo.cls='—'; s.tmp.presence=false; s.colors.yolo='idle';
+        else { s.yolo.conf=0; s.yolo.box=null; s.yolo.cls='—'; s.tmp.presence=false; s.tmp.speedPresence=false; s.colors.yolo='idle';
           lg(s,'idle',`YOLO: no detection (NULL) (${s.yolo.inferMs}ms)`); }
         s.worker.busy=false; }},
      {block:'voter',run:s=>{ s.activeBlock='voter'; const w=s.voter.window.slice(); w.push(s.tmp.input||null);
@@ -1317,12 +1350,23 @@ setTimeout(()=>hint.remove(), 7000);
         lg(s,confirmed?'success':(best>0?'processing':'idle'),
           `VOTER: ${cand||'—'} ${best}/${s.config.requiredVotes} → ${confirmed?'CONFIRMED':'accumulating'}`); }},
      {block:'cls',run:s=>{ s.activeBlock='cls';
-        if(s.tmp.confirmed){ const val=(s.tmp.cls!=null)?s.tmp.cls:s.tmp.candidate;
-          s.cls={roiSize:'64×64',result:val,conf:simRnd(.70,.96),inferMs:simJit(8,2)};
-          s.tmp.value=val; s.colors.roi='success'; s.colors.cls='success';
-          lg(s,'success',`ROI+CLS: classify best crop → value=${val} conf=${s.cls.conf} (${s.cls.inferMs}ms)`); }
+        if(s.tmp.confirmed){ const cand=s.tmp.candidate;
+          if(isSpeed(cand)){ const val=(s.tmp.cls!=null)?s.tmp.cls:cand;
+            s.cls={roiSize:'64×64',result:val,conf:simRnd(.70,.96),inferMs:simJit(8,2)};
+            s.tmp.value=val; s.colors.roi='success'; s.colors.cls='success';
+            lg(s,'success',`ROI+CLS: classify best crop → value=${val} conf=${s.cls.conf} (${s.cls.inferMs}ms)`); }
+          else { s.cls={roiSize:'—',result:cand,conf:0,inferMs:0};
+            s.tmp.value=cand; s.colors.roi='idle'; s.colors.cls='idle';
+            lg(s,'idle',`CLS: skipped (non-speed) — value = ${cand} (the class IS the value)`); } }
         else { s.colors.roi='idle'; s.colors.cls='idle'; lg(s,'idle',`CLS: skipped (no confirm) — Confirm-then-Classify`); } }},
-     {block:'l1',run:s=>{ s.activeBlock='l1'; const presence=s.tmp.presence,confirmed=s.tmp.confirmed;
+     {block:'router',run:s=>{ s.activeBlock='router';
+        if(s.tmp.confirmed){ const v=s.tmp.value, brain=isSpeed(v)?'speed':'momentary';
+          s.tmp.brain=brain; s.router={route:v,brain};
+          s.colors.router='success';
+          lg(s,'success',`ROUTER: ${v} → Brain ${brain==='speed'?'1 (PersistentState · L1–L3)':'2 (Momentary)'}`); }
+        else { s.tmp.brain=null; s.router={route:'—',brain:'—'}; s.colors.router='idle';
+          lg(s,'idle',`ROUTER: idle (no confirm)`); } }},
+     {block:'l1',run:s=>{ s.activeBlock='l1'; const presence=s.tmp.speedPresence,confirmed=s.tmp.confirmed && s.tmp.brain==='speed';
         const now=s.now,rearm=s.config.rearmMs;
         if(presence) s.l1.lastSeen=now;
         let fired=false,fresh=false; const st=s.l1.state;
@@ -1345,8 +1389,42 @@ setTimeout(()=>hint.remove(), 7000);
           const ok=r.action==='CHANGE'||r.action==='REMINDER'; s.colors.l3=ok?'success':'rejected';
           lg(s,ok?'success':'rejected',`L3: ${r.action}${ok?' 🔊 (reset cooldown)':' (silent)'}`); }
         else { s.tmp.announce=false; s.colors.l3='idle'; lg(s,'idle',`L3: idle`); } }},
+     {block:'momentary',run:s=>{ s.activeBlock='momentary';
+        if(s.tmp.confirmed && s.tmp.brain==='momentary'){ const c=s.tmp.value, now=s.now;
+          const win=SIM_MOM_WIN[c]||15000, last=s.momMeta.last[c];
+          const since=(last==null)?Infinity:(now-last);
+          const sinceTxt=(last==null)?'first':(since/1000).toFixed(1)+'s';
+          if(since>=win){ s.momMeta.last[c]=now; s.tmp.momAnnounce=true; s.tmp.momRank=SIM_MOM[c]||4; s.tmp.momFile=c+'.wav';
+            s.momentary={cls:c,since:sinceTxt,window:(win/1000)+'s',decision:'ANNOUNCE r='+(SIM_MOM[c]||4)};
+            s.colors.momentary='success';
+            lg(s,'success',`MOMENTARY: ${c} since=${sinceTxt} ≥ ${win/1000}s → ANNOUNCE rank=${SIM_MOM[c]||4}`); }
+          else { s.tmp.momAnnounce=false;
+            s.momentary={cls:c,since:sinceTxt,window:(win/1000)+'s',decision:'SUPPRESS'};
+            s.colors.momentary='rejected';
+            lg(s,'rejected',`MOMENTARY: ${c} since=${sinceTxt} < ${win/1000}s → SUPPRESS (silent · human-memory window)`); } }
+        else { s.tmp.momAnnounce=false; s.colors.momentary='idle'; lg(s,'idle',`MOMENTARY: idle (not a momentary confirm)`); } }},
+     {block:'arbiter',run:s=>{ s.activeBlock='arbiter'; const now=s.now;
+        let rank=null,file=null,elig=false,src=null;
+        if(s.tmp.brain==='speed' && s.tmp.announce){ rank=(SPEED_RANK[s.tmp.action]!=null)?SPEED_RANK[s.tmp.action]:2;
+          file=`${s.tmp.action.toLowerCase()}_${simNum(s.l2.current)}.wav`; elig=(s.tmp.action==='CHANGE'); src='speed '+s.tmp.action; }
+        else if(s.tmp.brain==='momentary' && s.tmp.momAnnounce){ rank=s.tmp.momRank; file=s.tmp.momFile; elig=false; src='momentary '+s.tmp.value; }
+        const idle = now>=s.arbMeta.busyUntil;
+        if(idle && s.arbMeta.currentRank!==0){ s.arbMeta.currentRank=0; if(s.arbMeta.owed){ s.arbMeta.owed=false;
+          lg(s,'waiting',`ARBITER: channel free → re-deliver owed CHANGE (replay from L2 belief)`); } }
+        if(rank==null){ s.tmp.play=false;
+          s.arbiter={incoming:'—',current:s.arbMeta.currentRank,decision:idle?'idle':'busy r='+s.arbMeta.currentRank};
+          s.colors.arbiter='idle'; lg(s,'idle',`ARBITER: nothing to play (${idle?'channel idle':'busy r='+s.arbMeta.currentRank})`); return; }
+        let dec;
+        if(idle){ dec='PLAY'; }
+        else if(rank>s.arbMeta.currentRank && rank>=INTERRUPT_THRESHOLD){ dec='PREEMPT'; if(s.arbMeta.eligible) s.arbMeta.owed=true; }
+        else { dec='DROP'; }
+        if(dec!=='DROP'){ s.arbMeta.currentRank=rank; s.arbMeta.busyUntil=now+NOMINAL_CLIP; s.arbMeta.eligible=elig; s.tmp.play=true; s.tmp.playFile=file; }
+        else { s.tmp.play=false; }
+        s.arbiter={incoming:src+' r='+rank,current:s.arbMeta.currentRank,decision:dec};
+        s.colors.arbiter=(dec==='DROP')?'rejected':'success';
+        lg(s,(dec==='DROP')?'rejected':'success',`ARBITER: ${src} rank=${rank} vs cur=${idle?'idle':s.arbMeta.currentRank} (thr=${INTERRUPT_THRESHOLD}) → ${dec}`); }},
      {block:'l4',run:s=>{ s.activeBlock='l4';
-        if(s.tmp.announce){ const v=simNum(s.l2.current); const fn=`${s.tmp.action.toLowerCase()}_${v}.wav`;
+        if(s.tmp.play){ const fn=s.tmp.playFile;
           s.l4={threadActive:true,playing:fn,pendingSlot:fn,queueState:'latest-wins (1 slot)'};
           s.colors.l4='success'; s.colors.speaker='success';
           lg(s,'success',`L4: notify → slot="${fn}" → 🔊 SPEAKER plays "${fn}"`); }
@@ -1365,6 +1443,8 @@ setTimeout(()=>hint.remove(), 7000);
     E:{setK:1,frames:[...det('sign_80',2),{input:null,advanceMs:181000},...det('sign_80',2)]},
     F:{setK:2,frames:[...det('sign_50',2),{input:'sign_50',clsOverride:'sign_80'},
                       {input:'sign_50',clsOverride:'sign_50'},{input:'sign_50',clsOverride:'sign_50'}]},
+    G:{setK:1,frames:[...det('sign_50',2),...det('School_Zone',3)]},
+    H:{setK:1,frames:[...det('School_Zone',4)]},
   };
 
   // ---- runtime state ----
@@ -1382,6 +1462,9 @@ setTimeout(()=>hint.remove(), 7000);
       case'voter':return['cand: '+s.voter.candidate,'votes: '+s.voter.votes+'/'+s.voter.required,'confirmed: '+s.voter.confirmed,'win:['+s.voter.window.map(x=>x?simNum(x):'·').join(',')+']'];
       case'roi':return['BestROI latch','highest-conf crop','→ CLS on confirm'];
       case'cls':return['roi: '+s.cls.roiSize,'result: '+s.cls.result,'conf: '+s.cls.conf,'infer: '+s.cls.inferMs+'ms'];
+      case'router':return['route: '+s.router.route,'brain: '+s.router.brain];
+      case'momentary':return['cls: '+s.momentary.cls,'since: '+s.momentary.since,'window: '+s.momentary.window,'decision: '+s.momentary.decision];
+      case'arbiter':return['incoming: '+s.arbiter.incoming,'current rank: '+s.arbiter.current,'threshold: '+INTERRUPT_THRESHOLD+(s.arbMeta.owed?'  · re-deliver owed':''),'decision: '+s.arbiter.decision];
       case'legacy':return['REMOVED at cutover 06-17','was: voter + cooldown → [CONFIRMED]','L1–L4 is now the authority'];
       case'l1':return['state: '+s.l1.state,'last seen: '+tt(s.l1.lastSeen),'rearm: '+s.l1.rearmActive,'fresh: '+s.l1.fresh];
       case'l2':return['state: '+s.l2.state,'limit: '+(s.l2.current!=null?simNum(s.l2.current):'—'),'pending: '+(s.l2.pending!=null?simNum(s.l2.pending):'—')+' ('+s.l2.pendingCount+')','K: '+s.config.K,'age: '+(s.l2.state==='ACTIVE'?((s.now-s.l2meta.lastConfirmedAt)/1000).toFixed(1)+'s':'—')];
@@ -1462,12 +1545,17 @@ setTimeout(()=>hint.remove(), 7000);
   SIM_SIGNS.forEach(sg=>{ const b=document.createElement('button'); b.className='simbtn';
     b.style.borderColor='#2c6a8f'; b.style.color='#9bd2f0'; b.textContent=sg.replace('sign_','');
     b.onclick=()=>simEnqueue(sg); $('#simInputs').appendChild(b); });
+  Object.keys(SIM_MOM).forEach(mc=>{ const b=document.createElement('button'); b.className='simbtn';
+    b.style.borderColor='#b01e51'; b.style.color='#f0a6c4';
+    b.textContent=mc.replace('Pedestrian_crossing','Ped_X').replace('School_Zone','School')+' r'+SIM_MOM[mc];
+    b.title='Brain 2 momentary · attention_rank '+SIM_MOM[mc];
+    b.onclick=()=>simEnqueue(mc); $('#simInputs').appendChild(b); });
   (function(){ const b=document.createElement('button'); b.className='simbtn'; b.textContent='NULL';
     b.onclick=()=>simEnqueue(null); $('#simInputs').appendChild(b); })();
   // scenario buttons
   Object.keys(SIM_SCEN).forEach(k=>{ const b=document.createElement('button'); b.className='simbtn';
     b.style.borderColor='#7c5cc4'; b.style.color='#cdbbf2'; b.textContent=k;
-    b.title=({A:'Normal detection 80×3',B:'YOLO flicker (no re-arm)',C:'Gapless 50→60',D:'Repeat same → SUPPRESS',E:'Reminder after 180s',F:'False CLS, K=2 rejects'})[k];
+    b.title=({A:'Normal detection 80×3',B:'YOLO flicker (no re-arm)',C:'Gapless 50→60',D:'Repeat same → SUPPRESS',E:'Reminder after 180s',F:'False CLS, K=2 rejects',G:'Brain2: School_Zone PREEMPTS playing speed clip',H:'Brain2: momentary suppression window'})[k];
     b.onclick=()=>simRunScenario(k); $('#simScens').appendChild(b); });
   // controls
   $('#simDbg').onclick=function(){ simDebug=!simDebug; this.classList.toggle('on',simDebug);
@@ -1496,6 +1584,9 @@ setTimeout(()=>hint.remove(), 7000);
     l3:{t:'L3 AnnouncementPolicy',p:['Decides what to SAY: CHANGE (always), REMINDER (fresh re-encounter, gated by cooldown), or SUPPRESS.'],w:['Either constant nagging or missing real changes.'],y:['Anti-spam lives HERE, not in perception. CHANGE bypasses but resets the cooldown; REMINDER also resets it. Default 180 s.'],th:'นโยบายประกาศ — ตัดสินว่าจะพูด CHANGE/REMINDER หรือเงียบ'},
     l4:{t:'L4 NotificationManager',p:['Maps (action,value) → wav and plays on a dedicated audio thread. Single slot, latest-wins; play outside the lock.'],w:['Synchronous play blocks perception; a FIFO queue plays STALE state.'],y:['Latest-wins: a burst collapses to first+last; the speaker never lies. aplay via posix_spawn — preemptible (kill-aplay) so safety can interrupt.'],th:'ตัวจัดการเสียง — เล่น wav เธรดแยก เก็บค่าล่าสุด ไม่บล็อกการมองเห็น; ตัดกลางคันได้ (kill-aplay)'},
     speaker:{t:'Speaker',p:['MAX98357A I2S amp + 3 W speaker. Speaks the Thai voice clip.'],w:['No audible notification.'],y:['Final non-authoritative output of the SHADOW path (--shadow --audio). Legacy console authority untouched.'],th:'ลำโพง — เอาต์พุตเสียงจริงของฝั่ง shadow'},
+    router:{t:'BehaviorPolicyRouter',p:['After a confirm, decides WHICH behavioural brain handles the class.','Speed family → Brain 1 (L1–L3 belief). The other 10 signs → Brain 2 (Momentary).'],w:['One monolith would force speed re-derivation logic onto momentary signs (which have no second chance) and vice-versa.'],y:['Two engines, one decision: the asymmetry (re-derivable vs no-2nd-chance) is the whole reason there are two brains.'],th:'เราเตอร์พฤติกรรม — หลัง confirm เลือกว่าจะส่งเข้า Brain 1 (speed) หรือ Brain 2 (momentary)'},
+    momentary:{t:'Momentary Engine (Brain 2)',p:['Handles the 10 non-speed signs with NO episode lifecycle.','Human-memory model: now − last_notified[class] ≥ suppression_window → ANNOUNCE (+attention_rank), else SUPPRESS.'],w:['Re-announcing every frame a sign stays in view = cry-wolf; the driver learns to ignore.'],y:['Momentary info has no 2nd chance (drive past → gone), so it MAY interrupt — but only within its per-class memory window.'],th:'สมอง 2 (momentary) — ไม่มี lifecycle ใช้หน้าต่างความจำต่อคลาส: เพิ่งเตือนไป → เงียบ'},
+    arbiter:{t:'Notification Arbiter',p:['Stateful cross-brain scheduler. BOTH brains submit (rank, file) here before the shared L4.','idle → PLAY · busy & rank>current & rank≥THRESHOLD(20) → PREEMPT (kill-aplay) · else DROP.'],w:['Last-wins alone would let a speed reminder talk over a life-safety warning, or queue stale clips.'],y:['One axis (attention_rank) makes selection-order = interrupt-order. THRESHOLD = lowest safety rank ⇒ "may interrupt" ⟺ "is life-safety" (re-derives Law 2). Speed ranks (12/2) < 20 → speed never preempts; a preempted CHANGE is re-delivered from current belief.'],th:'อาร์บิเตอร์ — ตัวจัดคิวความสนใจข้ามสองสมอง: rank ≥ 20 (safety) แทรกได้ ตัด aplay กลางคัน; speed ไม่มีวันแทรก'},
   };
   const why=document.createElement('div'); why.id='simWhy';
   why.style.cssText='position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(3,6,10,.72)';
