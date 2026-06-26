@@ -33,8 +33,8 @@ https://github.com/user-attachments/assets/ae2531b6-3ab8-476e-abaf-a1c68d431d60
 
 | | |
 |---|---|
-| ![School Zone detection](README_assets/school_zone.png) | ![Pedestrian Warning detection](README_assets/pedestrian_warning_sign.png) |
-| ![No U-turn detection](README_assets/no_u_turn.png) | ![Traffic-light-ahead sign detection](README_assets/traffic_sign.png) |
+| ![Pedestrian-crossing detection on the Raspberry Pi 5](README_assets/ped_crossing.png) | ![School-Zone detection on the Raspberry Pi 5](README_assets/school_zone.png) |
+| ![Speed-limit 100 detection on the Raspberry Pi 5](README_assets/sign_100.png) | ![Speed-limit 60 detection on the Raspberry Pi 5](README_assets/sign_60.png) |
 
 ---
 
